@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="com.electronic.archive.mapper.SysRolePermissionMapper">
+    
+    <!-- 根据角色ID获取权限ID列表 -->
+    <select id="getPermissionIdsByRoleId" parameterType="java.lang.Long" resultType="java.lang.Long">
+        SELECT permission_id FROM sys_role_permission WHERE role_id = #{roleId}
+    </select>
+    
+    <!-- 根据角色ID删除所有关联的权限 -->
+    <delete id="deleteByRoleId" parameterType="java.lang.Long">
+        DELETE FROM sys_role_permission WHERE role_id = #{roleId}
+    </delete>
+</mapper>

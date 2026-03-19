@@ -1,0 +1,36 @@
+package com.electronic.archive.dto;
+
+import lombok.Data;
+
+import java.util.List;
+
+/**
+ * 采集请求参数
+ */
+@Data
+public class CollectionRequestDTO {
+    /**
+     * 档案类型
+     */
+    private Integer archiveType;
+
+    /**
+     * 档案路径列表
+     */
+    private List<String> filePaths;
+
+    /**
+     * 元数据
+     */
+    private String metadata;
+
+    /**
+     * 操作人
+     */
+    private String operateBy;
+
+    /**
+     * 备注
+     */
+    private String remark;
+}

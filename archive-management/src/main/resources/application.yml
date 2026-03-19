@@ -1,0 +1,78 @@
+server:
+  port: 8080
+  servlet:
+    context-path: /archive
+  # 启用Gzip压缩
+  compression:
+    enabled: true
+    mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
+    min-response-size: 2048
+
+spring:
+  application:
+    name: archive-management
+  # 允许循环依赖
+  main:
+    allow-circular-references: true
+  # 数据源配置
+  datasource:
+    driver-class-name: com.mysql.cj.jdbc.Driver
+    url: jdbc:mysql://192.168.180.128:3306/archive_management?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
+    username: root
+    password: TanLiMing123!
+    # Hikari连接池配置
+    hikari:
+      maximum-pool-size: 20
+      minimum-idle: 5
+      idle-timeout: 30000
+      connection-timeout: 30000
+      max-lifetime: 1800000
+      pool-name: ArchiveHikariCP
+      connection-test-query: SELECT 1
+
+  # 文件上传配置
+  servlet:
+    multipart:
+      max-file-size: 100MB
+      max-request-size: 100MB
+
+# MyBatis-Plus配置
+mybatis-plus:
+  mapper-locations: classpath:mapper/*.xml
+  type-aliases-package: com.electronic.archive.entity
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+
+
+
+# 日志配置
+logging:
+  config: classpath:logback-spring.xml
+  level:
+    com.electronic.archive: debug
+
+# Actuator监控配置
+management:
+  endpoints:
+    web:
+      exposure:
+        include: "*"  # 暴露所有web端点
+      base-path: /archive/actuator  # 配置基础路径
+    enabled-by-default: true  # 默认启用所有端点
+  endpoint:
+    health:
+      show-details: always  # 显示详细健康信息
+      probes:
+        enabled: true
+    metrics:
+      enabled: true
+    prometheus:
+      enabled: true
+  metrics:
+    tags:
+      application: ${spring.application.name:archive-management}
+  prometheus:
+    metrics:
+      export:
+        enabled: true

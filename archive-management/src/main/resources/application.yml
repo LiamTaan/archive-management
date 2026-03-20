@@ -17,7 +17,7 @@ spring:
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver
-    url: jdbc:mysql://192.168.180.128:3306/archive_management?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai
+    url: jdbc:mysql://192.168.180.128:3306/archive_management?useUnicode=true&characterEncoding=UTF-8&useSSL=false&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true
     username: root
     password: TanLiMing123!
     # Hikari连接池配置
@@ -51,6 +51,12 @@ logging:
   config: classpath:logback-spring.xml
   level:
     com.electronic.archive: debug
+
+# 文件存储配置
+archive:
+  file:
+    storage:
+      path: ${ARCHIVE_FILE_PATH:/opt/archive-files}
 
 # Actuator监控配置
 management:

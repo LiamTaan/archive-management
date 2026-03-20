@@ -7,4 +7,5 @@ import com.electronic.archive.entity.InterfaceConfig;
  * 接口配置服务接口
  */
 public interface InterfaceConfigService extends IService<InterfaceConfig> {
+    String getTargetSystemName(String systemCode);
 }

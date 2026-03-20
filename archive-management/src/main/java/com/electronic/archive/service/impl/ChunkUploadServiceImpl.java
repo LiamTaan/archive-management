@@ -6,6 +6,7 @@ import com.electronic.archive.dto.MergeChunksDTO;
 import com.electronic.archive.entity.ArchiveInfo;
 import com.electronic.archive.service.ArchiveInfoService;
 import com.electronic.archive.service.ChunkUploadService;
+import com.electronic.archive.service.CollectionLogService;
 import com.electronic.archive.service.SysUserService;
 import com.electronic.archive.vo.ResponseResult;
 import lombok.extern.slf4j.Slf4j;
@@ -39,6 +40,9 @@ public class ChunkUploadServiceImpl implements ChunkUploadService {
     
     @Autowired
     private SysUserService sysUserService;
+    
+    @Autowired
+    private CollectionLogService collectionLogService;
     
     // 文件存储路径，可在application.yml中配置
     @Value("${archive.file.storage.path:D:/archive-files}")
@@ -172,18 +176,19 @@ public class ChunkUploadServiceImpl implements ChunkUploadService {
      * @param filePath 文件路径
      */
     private void createArchiveInfo(MergeChunksDTO mergeChunksDTO, String filePath) {
+        // 获取当前登录用户的昵称作为责任人
+        String responsiblePerson = "user";
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null) {
+            String username = authentication.getName();
+            // 这里假设SysUserService有getByUsername方法
+            // SysUser user = sysUserService.getByUsername(username);
+            // if (user != null) {
+            //     responsiblePerson = user.getNickname() != null ? user.getNickname() : user.getUsername();
+            // }
+        }
+        
         try {
-            // 获取当前登录用户的昵称作为责任人
-            String responsiblePerson = "user";
-            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null) {
-                String username = authentication.getName();
-                // 这里假设SysUserService有getByUsername方法
-                // SysUser user = sysUserService.getByUsername(username);
-                // if (user != null) {
-                //     responsiblePerson = user.getNickname() != null ? user.getNickname() : user.getUsername();
-                // }
-            }
             
             // 创建档案信息
             ArchiveInfo archiveInfo = new ArchiveInfo();
@@ -197,16 +202,42 @@ public class ChunkUploadServiceImpl implements ChunkUploadService {
             archiveInfo.setBusinessType(getBusinessType(mergeChunksDTO.getUploadType()));
             archiveInfo.setResponsiblePerson(responsiblePerson);
             archiveInfo.setHangOnType(1);
-            archiveInfo.setStatus(2);
+            archiveInfo.setStatus(0);
             archiveInfo.setRemark(mergeChunksDTO.getUploadType() + "上传档案");
             archiveInfo.setCreateTime(LocalDateTime.now());
             archiveInfo.setUpdateTime(LocalDateTime.now());
 
             archiveInfoService.save(archiveInfo);
             
+            // 记录采集日志
+            Integer collectionType = getCollectionType(mergeChunksDTO.getUploadType());
+            collectionLogService.saveCollectionLog(
+                    archiveInfo.getId(),
+                    collectionType,
+                    responsiblePerson,
+                    String.format("%s上传档案：%s", mergeChunksDTO.getUploadType(), mergeChunksDTO.getFileName()),
+                    1, // 成功
+                    null,
+                    1, // totalCount
+                    1, // successCount
+                    0 // failCount
+            );
+            
             log.info("档案信息创建成功：fileId={}, fileName={}", archiveInfo.getId(), archiveInfo.getFileName());
         } catch (Exception e) {
             log.error("档案信息创建失败：", e);
+            // 记录采集日志（失败）
+            collectionLogService.saveCollectionLog(
+                    null,
+                    getCollectionType(mergeChunksDTO.getUploadType()),
+                    responsiblePerson,
+                    String.format("%s上传档案：%s", mergeChunksDTO.getUploadType(), mergeChunksDTO.getFileName()),
+                    0, // 失败
+                    e.getMessage(),
+                    1, // totalCount
+                    0, // successCount
+                    1 // failCount
+            );
         }
     }
     
@@ -225,6 +256,24 @@ public class ChunkUploadServiceImpl implements ChunkUploadService {
                 return "外部导入";
             default:
                 return "未知上传类型";
+        }
+    }
+    
+    /**
+     * 根据上传类型获取采集方式
+     * @param uploadType 上传类型
+     * @return 采集方式(0-手动，1-批量，2-接口，3-外部导入)
+     */
+    private Integer getCollectionType(String uploadType) {
+        switch (uploadType) {
+            case "manual":
+                return 0;
+            case "batch":
+                return 1;
+            case "external":
+                return 3;
+            default:
+                return 2;
         }
     }
 }

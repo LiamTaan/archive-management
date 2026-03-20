@@ -50,6 +50,9 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
     @Autowired
     private NotificationService notificationService;
 
+    @Autowired
+    private InterfaceConfigService interfaceConfigService;
+
     /**
      * 检查档案是否已经挂接了指定系统
      * @param archiveId 档案ID
@@ -171,11 +174,13 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             if (archiveInfo == null) {
                 errorInfo = "档案不存在";
                 log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
+                return hookResult;
             } 
             // 2. 检查是否已挂接相同系统
             else if (isArchiveHangedOnSystem(archiveId, systemCode)) {
                 errorInfo = "档案已挂接该系统";
                 log.error("手动挂接失败，档案ID：{}，系统代码：{}，{}", archiveId, systemCode, errorInfo);
+                return hookResult;
             } else {
                 // 3. 模拟挂接操作
                 hookResult = true; // 模拟挂接成功
@@ -194,14 +199,15 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             errorInfo = "系统异常：" + e.getMessage();
             log.error("手动挂接档案失败，档案ID：{}，系统代码：{}", archiveId, systemCode, e);
         } finally {
-            // 5. 记录挂接日志（0-挂接，1-修改，2-解除）
-            HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, operateBy, "manual", systemCode,
-                                          hookResult ? "手动挂接成功" : "手动挂接失败", 
-                                          errorInfo);
-            hangOnLogMapper.insert(hangOnLog);
-
-            // 发送挂接通知
+            // 只有当档案存在时才记录挂接日志
             if (archiveInfo != null) {
+                // 5. 记录挂接日志（0-挂接，1-修改，2-解除）
+                HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, operateBy, "manual", systemCode,
+                                              hookResult ? "手动挂接成功" : "手动挂接失败", 
+                                              errorInfo);
+                hangOnLogMapper.insert(hangOnLog);
+
+                // 发送挂接通知
                 Notification notification = new Notification();
                 notification.setTitle("档案挂接通知");
                 notification.setContent(hookResult ? "档案手动挂接成功" : "档案手动挂接失败");
@@ -243,11 +249,13 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             if (archiveInfo == null) {
                 errorInfo = "档案不存在";
                 log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
+                return hookResult;
             } 
             // 2. 检查是否已挂接相同系统
             else if (isArchiveHangedOnSystem(archiveId, systemCode)) {
                 errorInfo = "档案已挂接该系统";
                 log.error("手动挂接失败，档案ID：{}，系统代码：{}，{}", archiveId, systemCode, errorInfo);
+                return hookResult;
             } else {
                 // 3. 模拟挂接操作
                 hookResult = true; // 模拟挂接成功
@@ -284,11 +292,14 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             errorInfo = "系统异常：" + e.getMessage();
             log.error("手动挂接档案失败，档案ID：{}，系统代码：{}", archiveId, systemCode, e);
         } finally {
-            // 5. 记录挂接日志（0-挂接，1-修改，2-解除）
-            HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, operateBy, "manual", systemCode, 
-                                          hookResult ? "手动挂接成功" : "手动挂接失败", 
-                                          errorInfo);
-            hangOnLogMapper.insert(hangOnLog);
+            // 只有当档案存在时才记录挂接日志
+            if (archiveInfo != null) {
+                // 5. 记录挂接日志（0-挂接，1-修改，2-解除）
+                HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, operateBy, "manual", systemCode, 
+                                              hookResult ? "手动挂接成功" : "手动挂接失败", 
+                                              errorInfo);
+                hangOnLogMapper.insert(hangOnLog);
+            }
 
             log.info("手动挂接档案完成，档案ID：{}，系统代码：{}，结果：{}", archiveId, systemCode, hookResult);
         }
@@ -358,6 +369,7 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             if (archiveInfo == null) {
                 errorInfo = "档案不存在";
                 log.error("解除挂接失败，档案ID：{}，{}", archiveId, errorInfo);
+                return unhookResult;
             }
             // 2. 检查档案是否已挂接
             else if (archiveInfo.getStatus() != 1) {
@@ -369,7 +381,7 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
 
                 // 4. 更新档案状态
                 if (unhookResult) {
-                    archiveInfo.setStatus(2); // 未挂接
+                    archiveInfo.setStatus(0); // 未挂接
                     archiveInfo.setUpdateTime(LocalDateTime.now());
                     archiveInfoService.updateById(archiveInfo);
                 } else {
@@ -380,14 +392,15 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             errorInfo = "系统异常：" + e.getMessage();
             log.error("解除挂接档案失败，档案ID：{}，系统代码：{}", archiveId, systemCode, e);
         } finally {
-            // 5. 记录解除挂接日志（作为特殊的挂接日志）
-            HangOnLog hangOnLog = createHangOnLog(archiveId, 2, unhookResult ? 1 : 2, operateBy, "unhook", systemCode,
-                                          unhookResult ? "解除挂接成功" : "解除挂接失败", 
-                                          errorInfo);
-            hangOnLogMapper.insert(hangOnLog);
-
-            // 发送解除挂接通知
+            // 只有当档案存在时才记录挂接日志
             if (archiveInfo != null) {
+                // 5. 记录解除挂接日志（作为特殊的挂接日志）
+                HangOnLog hangOnLog = createHangOnLog(archiveId, 2, unhookResult ? 1 : 2, operateBy, "unhook", systemCode,
+                                              unhookResult ? "解除挂接成功" : "解除挂接失败", 
+                                              errorInfo);
+                hangOnLogMapper.insert(hangOnLog);
+
+                // 发送解除挂接通知
                 Notification notification = new Notification();
                 notification.setTitle("档案挂接通知");
                 notification.setContent(unhookResult ? "档案解除挂接成功" : "档案解除挂接失败");
@@ -416,6 +429,7 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             if (archiveInfo == null) {
                 errorInfo = "档案不存在";
                 log.error("重试挂接失败，档案ID：{}，{}", archiveId, errorInfo);
+                return retryResult;
             }
             // 2. 检查档案是否为挂接失败状态
             else if (archiveInfo.getStatus() != 2) {
@@ -438,14 +452,15 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             errorInfo = "系统异常：" + e.getMessage();
             log.error("重试挂接档案失败，档案ID：{}", archiveId, e);
         } finally {
-            // 5. 记录重试挂接日志
-            HangOnLog hangOnLog = createHangOnLog(archiveId, 0, retryResult ? 1 : 2, operateBy, "retry", "target-system",
-                                          retryResult ? "重试挂接成功" : "重试挂接失败", 
-                                          errorInfo);
-            hangOnLogMapper.insert(hangOnLog);
-
-            // 发送重试挂接通知
+            // 只有当档案存在时才记录挂接日志
             if (archiveInfo != null) {
+                // 5. 记录重试挂接日志
+                HangOnLog hangOnLog = createHangOnLog(archiveId, 0, retryResult ? 1 : 2, operateBy, "retry", "target-system",
+                                              retryResult ? "重试挂接成功" : "重试挂接失败", 
+                                              errorInfo);
+                hangOnLogMapper.insert(hangOnLog);
+
+                // 发送重试挂接通知
                 Notification notification = new Notification();
                 notification.setTitle("档案挂接通知");
                 notification.setContent(retryResult ? "档案重试挂接成功" : "档案重试挂接失败");
@@ -649,15 +664,17 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
      * 创建挂接日志
      */
     private HangOnLog createHangOnLog(Long archiveId, Integer hangOnType, Integer result, 
-                                     String operateBy, String hangOnMethod, String targetSystem, 
+                                     String operateBy, String hangOnMethod, String systemCode,
                                      String description, String errorInfo) {
+        // 获取接口配置的业务名称
+        String targetSystemName = interfaceConfigService.getTargetSystemName(systemCode);
         HangOnLog hangOnLog = new HangOnLog();
         hangOnLog.setArchiveId(archiveId);
         hangOnLog.setHangOnType(hangOnType);
         hangOnLog.setResult(result);
         hangOnLog.setOperateBy(operateBy);
         // 将hangOnMethod和targetSystem合并到description中
-        String fullDescription = String.format("%s [方式: %s, 目标系统: %s]", description, hangOnMethod, targetSystem);
+        String fullDescription = String.format("%s [方式: %s, 目标编码：%s, 目标系统: %s]", description, hangOnMethod, systemCode,targetSystemName);
         hangOnLog.setDescription(fullDescription);
         hangOnLog.setErrorInfo(errorInfo);
         hangOnLog.setCreateTime(LocalDateTime.now());

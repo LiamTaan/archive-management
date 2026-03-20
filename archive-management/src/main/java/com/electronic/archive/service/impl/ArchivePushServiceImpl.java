@@ -96,7 +96,7 @@ public class ArchivePushServiceImpl implements ArchivePushService {
             hangOnLog.setResult(1); // 1-成功
             hangOnLog.setOperateBy(pushDTO.getResponsiblePerson());
             // 将hangOnMethod和targetSystem合并到description中
-            String fullDescription = String.format("业务系统推送挂接成功，业务单号：%s [方式: auto, 目标系统: %s]", pushDTO.getBusinessNo(), pushDTO.getSystemCode());
+            String fullDescription = String.format("业务系统推送挂接成功，业务单号：%s [方式: auto, 目标系统编码：%s,目标系统: %s]", pushDTO.getBusinessNo(), pushDTO.getSystemCode(), pushDTO.getSystemCode());
             hangOnLog.setDescription(fullDescription);
             hangOnLog.setCreateTime(LocalDateTime.now());
             hangOnLogMapper.insert(hangOnLog);

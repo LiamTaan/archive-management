@@ -191,7 +191,7 @@ public class HookValidationServiceImpl implements HookValidationService {
     @Override
     public boolean validateFileFormat(String fileType, String filePath) {
         // 允许的文件类型列表
-        List<String> allowedTypes = List.of("pdf", "doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png", "tif", "tiff");
+        List<String> allowedTypes = List.of("pdf", "pptx" ,"doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png", "tif", "tiff");
         
         // 检查文件类型是否在允许列表中
         if (fileType == null || !allowedTypes.contains(fileType.toLowerCase())) {

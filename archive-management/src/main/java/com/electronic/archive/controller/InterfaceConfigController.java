@@ -12,6 +12,7 @@ import io.swagger.v3.oas.annotations.Operation;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.time.LocalDateTime;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -68,6 +69,26 @@ public class InterfaceConfigController {
     @Operation(summary = "新增接口配置")
     @PostMapping
     public ResponseResult<InterfaceConfig> addInterfaceConfig(@RequestBody InterfaceConfig interfaceConfig) {
+        // 设置默认值
+        if (interfaceConfig.getRequestParams() == null) {
+            interfaceConfig.setRequestParams("{}"); // 空JSON对象作为默认值
+        }
+        if (interfaceConfig.getStatus() == null) {
+            interfaceConfig.setStatus(1); // 默认启用
+        }
+        if (interfaceConfig.getTimeout() == null) {
+            interfaceConfig.setTimeout(30); // 默认超时时间30秒
+        }
+        if (interfaceConfig.getSecretKey() == null) {
+            interfaceConfig.setSecretKey(""); // 空字符串作为默认值
+        }
+        if (interfaceConfig.getCreateTime() == null) {
+            interfaceConfig.setCreateTime(LocalDateTime.now());
+        }
+        if (interfaceConfig.getUpdateTime() == null) {
+            interfaceConfig.setUpdateTime(LocalDateTime.now());
+        }
+        
         boolean result = interfaceConfigService.save(interfaceConfig);
         if (result) {
             return ResponseResult.success("新增接口配置成功", interfaceConfig);
@@ -80,6 +101,21 @@ public class InterfaceConfigController {
     @PutMapping("/{id}")
     public ResponseResult<InterfaceConfig> updateInterfaceConfig(@PathVariable Long id, @RequestBody InterfaceConfig interfaceConfig) {
         interfaceConfig.setId(id);
+        // 设置默认值
+        if (interfaceConfig.getRequestParams() == null) {
+            interfaceConfig.setRequestParams("{}"); // 空JSON对象作为默认值
+        }
+        if (interfaceConfig.getStatus() == null) {
+            interfaceConfig.setStatus(1); // 默认启用
+        }
+        if (interfaceConfig.getTimeout() == null) {
+            interfaceConfig.setTimeout(30); // 默认超时时间30秒
+        }
+        if (interfaceConfig.getSecretKey() == null) {
+            interfaceConfig.setSecretKey(""); // 空字符串作为默认值
+        }
+        interfaceConfig.setUpdateTime(LocalDateTime.now()); // 更新时间设为当前时间
+        
         boolean result = interfaceConfigService.updateById(interfaceConfig);
         if (result) {
             return ResponseResult.success("更新接口配置成功", interfaceConfig);

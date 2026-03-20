@@ -120,6 +120,13 @@
             <artifactId>easyexcel</artifactId>
             <version>3.3.3</version>
         </dependency>
+        
+        <!-- Apache PDFBox - 用于生成和处理PDF文件 -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.1</version>
+        </dependency>
     </dependencies>
 
     <build>

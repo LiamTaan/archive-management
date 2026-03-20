@@ -11,4 +11,13 @@ import org.springframework.stereotype.Service;
  */
 @Service
 public class InterfaceConfigServiceImpl extends ServiceImpl<InterfaceConfigMapper, InterfaceConfig> implements InterfaceConfigService {
+
+    @Override
+    public String getTargetSystemName(String systemCode) {
+        // 根据系统编码（接口编码）获取业务系统名称
+        InterfaceConfig interfaceConfig = this.lambdaQuery()
+                .eq(InterfaceConfig::getInterfaceCode, systemCode)
+                .one();
+        return interfaceConfig != null ? interfaceConfig.getBusinessSystem() : "未知系统";
+    }
 }

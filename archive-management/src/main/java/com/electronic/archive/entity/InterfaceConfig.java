@@ -24,6 +24,11 @@ public class InterfaceConfig {
      * 接口名称
      */
     private String interfaceName;
+    
+    /**
+     * 接口编码
+     */
+    private String interfaceCode;
 
     /**
      * 业务系统名称
@@ -35,6 +40,11 @@ public class InterfaceConfig {
      */
     @TableField("url")
     private String interfaceUrl;
+    
+    /**
+     * 文件元信息接口URL
+     */
+    private String metadataUrl;
 
     /**
      * 请求方法（GET, POST, PUT, DELETE）
@@ -44,8 +54,13 @@ public class InterfaceConfig {
     /**
      * 参数映射（JSON格式）
      */
-    @TableField("param_mapping")
+    @TableField("request_params")
     private String requestParams;
+    
+    /**
+     * 请求头（JSON格式）
+     */
+    private String requestHeaders;
 
     /**
      * 接口密钥
@@ -61,6 +76,31 @@ public class InterfaceConfig {
      * 接口状态（1：启用，0：禁用）
      */
     private Integer status;
+    
+    /**
+     * 单文件大小限制（MB），默认50MB
+     */
+    private Integer maxFileSize = 50;
+    
+    /**
+     * 传输模式：DIRECT-直传，SHARD-分片
+     */
+    private String transferMode = "SHARD";
+    
+    /**
+     * 采集调度规则（Cron表达式）
+     */
+    private String cronExpression;
+    
+    /**
+     * 大文件分片大小(MB)，默认10MB
+     */
+    private Integer chunkSize = 10;
+    
+    /**
+     * 文件存储路径
+     */
+    private String storagePath;
 
     /**
      * 创建时间

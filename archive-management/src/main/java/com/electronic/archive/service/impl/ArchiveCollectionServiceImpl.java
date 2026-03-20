@@ -171,7 +171,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             
             // 记录采集日志（失败）
             collectionLogService.saveCollectionLog(
-                    null,
+                    1111111,
                     2, // 接口采集
                     "system",
                     String.format("自动接口采集档案，接口ID：%d", interfaceId),

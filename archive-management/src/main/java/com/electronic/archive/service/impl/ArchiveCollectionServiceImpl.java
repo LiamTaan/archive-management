@@ -72,7 +72,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             archiveInfo.setBusinessType("自动采集");
             archiveInfo.setResponsiblePerson("system");
             archiveInfo.setHangOnType(0);
-            archiveInfo.setStatus(2);
+            archiveInfo.setStatus(1);
             archiveInfo.setRemark("自动采集测试档案");
             archiveInfo.setCreateTime(LocalDateTime.now());
             archiveInfo.setUpdateTime(LocalDateTime.now());
@@ -180,7 +180,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setBusinessType("手动上传");
                     archiveInfo.setResponsiblePerson(responsiblePerson);
                     archiveInfo.setHangOnType(1);
-                    archiveInfo.setStatus(2);
+                    archiveInfo.setStatus(0);
                     archiveInfo.setRemark("手动上传档案");
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());
@@ -264,7 +264,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setBusinessType("批量上传");
                     archiveInfo.setResponsiblePerson(responsiblePerson);
                     archiveInfo.setHangOnType(1);
-                    archiveInfo.setStatus(2);
+                    archiveInfo.setStatus(0);
                     archiveInfo.setRemark("批量上传档案");
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());
@@ -348,7 +348,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setBusinessType("外部导入");
                     archiveInfo.setResponsiblePerson(responsiblePerson);
                     archiveInfo.setHangOnType(1);
-                    archiveInfo.setStatus(2);
+                    archiveInfo.setStatus(0);
                     archiveInfo.setRemark("外部导入档案");
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());

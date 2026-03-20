@@ -50,6 +50,30 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
     @Autowired
     private NotificationService notificationService;
 
+    /**
+     * 检查档案是否已经挂接了指定系统
+     * @param archiveId 档案ID
+     * @param systemCode 系统代码
+     * @return 是否已挂接
+     */
+    private boolean isArchiveHangedOnSystem(Long archiveId, String systemCode) {
+        // 查询该档案的所有挂接日志
+        LambdaQueryWrapper<HangOnLog> queryWrapper = new LambdaQueryWrapper<>();
+        queryWrapper.eq(HangOnLog::getArchiveId, archiveId)
+                   .eq(HangOnLog::getHangOnType, 0) // 只查询挂接操作
+                   .eq(HangOnLog::getResult, 1); // 只查询成功的挂接
+        List<HangOnLog> hangOnLogs = hangOnLogMapper.selectList(queryWrapper);
+        
+        // 检查是否存在相同系统的挂接记录
+        for (HangOnLog log : hangOnLogs) {
+            String description = log.getDescription();
+            if (description != null && description.contains("目标系统: " + systemCode)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     @Override
     public boolean autoHangOn(Long archiveId) {
         try {
@@ -60,9 +84,10 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                 return false;
             }
             
-            // 2. 检查档案是否已挂接
-            if (archiveInfo.getStatus() == 1) {
-                log.error("自动挂接失败，档案ID：{}，档案已挂接", archiveId);
+            // 2. 检查是否已挂接相同系统
+            String systemCode = "target-system"; // 自动挂接使用固定系统代码
+            if (isArchiveHangedOnSystem(archiveId, systemCode)) {
+                log.error("自动挂接失败，档案ID：{}，已挂接该系统", archiveId);
                 return false;
             }
 
@@ -147,10 +172,10 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                 errorInfo = "档案不存在";
                 log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
             } 
-            // 2. 检查档案是否已挂接
-            else if (archiveInfo.getStatus() == 1) {
-                errorInfo = "档案已挂接";
-                log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
+            // 2. 检查是否已挂接相同系统
+            else if (isArchiveHangedOnSystem(archiveId, systemCode)) {
+                errorInfo = "档案已挂接该系统";
+                log.error("手动挂接失败，档案ID：{}，系统代码：{}，{}", archiveId, systemCode, errorInfo);
             } else {
                 // 3. 模拟挂接操作
                 hookResult = true; // 模拟挂接成功
@@ -219,10 +244,10 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                 errorInfo = "档案不存在";
                 log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
             } 
-            // 2. 检查档案是否已挂接
-            else if (archiveInfo.getStatus() == 1) {
-                errorInfo = "档案已挂接";
-                log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
+            // 2. 检查是否已挂接相同系统
+            else if (isArchiveHangedOnSystem(archiveId, systemCode)) {
+                errorInfo = "档案已挂接该系统";
+                log.error("手动挂接失败，档案ID：{}，系统代码：{}，{}", archiveId, systemCode, errorInfo);
             } else {
                 // 3. 模拟挂接操作
                 hookResult = true; // 模拟挂接成功
@@ -522,8 +547,12 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                     relations.add(relation);
                 }
             } else {
-                // 5. 添加所有状态的关系，不仅仅是已挂接状态
-            relations.addAll(systemRelations.values());
+                // 5. 只添加挂接成功的关系
+                for (Map<String, Object> relation : systemRelations.values()) {
+                    if ("已挂接".equals(relation.get("status"))) {
+                        relations.add(relation);
+                    }
+                }
             }
 
             log.info("获取挂接关系完成，档案ID：{}，关系数量：{}", archiveId, relations.size());

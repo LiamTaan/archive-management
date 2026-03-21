@@ -16,8 +16,14 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
+import com.fasterxml.jackson.databind.ObjectMapper;
 
+import java.io.BufferedInputStream;
 import java.io.File;
+import java.io.FileInputStream;
+import java.io.IOException;
+import java.io.OutputStream;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -83,22 +89,28 @@ public class ArchiveInfoController {
      */
     @GetMapping("/download")
     @Operation(summary = "下载档案文件", description = "根据档案ID下载档案文件")
-    public ResponseEntity<Object> downloadArchive(@RequestParam Long id) {
+    public ResponseEntity<StreamingResponseBody> downloadArchive(@RequestParam Long id) {
         try {
             ArchiveInfo archiveInfo = archiveInfoService.getById(id);
             if (archiveInfo == null) {
                 ResponseResult<String> result = ResponseResult.fail("档案不存在");
-                return ResponseEntity.status(HttpStatus.OK).body(result);
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
             }
 
-            // 根据文件路径获取文件资源
+            // 根据文件路径获取文件
             String filePath = archiveInfo.getFilePath();
-            FileSystemResource fileResource = new FileSystemResource(filePath);
+            File file = new File(filePath);
 
-            if (!fileResource.exists()) {
+            if (!file.exists()) {
                 String errorMsg = "文件不存在: " + filePath;
                 ResponseResult<String> result = ResponseResult.fail(errorMsg);
-                return ResponseEntity.status(HttpStatus.OK).body(result);
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
             }
 
             // 设置响应头
@@ -123,16 +135,33 @@ public class ArchiveInfoController {
             headers.setContentDispositionFormData("attachment", actualFileName);
 
             // 设置文件大小
-            headers.setContentLength(fileResource.contentLength());
+            headers.setContentLength(file.length());
 
-            // 使用InputStreamResource避免Spring覆盖Content-Disposition响应头
-            InputStreamResource inputStreamResource = new InputStreamResource(fileResource.getInputStream());
+            // 使用StreamingResponseBody实现流式传输，避免一次性加载大文件到内存
+            StreamingResponseBody responseBody = outputStream -> {
+                try (FileInputStream fileInputStream = new FileInputStream(file);
+                     BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
+                    // 使用缓冲流高效读取大文件
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                    }
+                    outputStream.flush();
+                }
+            };
 
-            return new ResponseEntity<>(inputStreamResource, headers, HttpStatus.OK);
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(responseBody);
         } catch (Exception e) {
             String errorMsg = "下载失败: " + e.getMessage();
             ResponseResult<String> result = ResponseResult.fail(errorMsg);
-            return ResponseEntity.status(HttpStatus.OK).body(result);
+            StreamingResponseBody responseBody = outputStream -> {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.writeValue(outputStream, result);
+            };
+            return ResponseEntity.status(HttpStatus.OK).body(responseBody);
         }
     }
 
@@ -143,22 +172,28 @@ public class ArchiveInfoController {
      */
     @GetMapping("/preview")
     @Operation(summary = "预览档案文件", description = "根据档案ID 预览档案文件")
-    public ResponseEntity<Object> previewArchive(@RequestParam Long id) {
+    public ResponseEntity<StreamingResponseBody> previewArchive(@RequestParam Long id) {
         try {
             ArchiveInfo archiveInfo = archiveInfoService.getById(id);
             if (archiveInfo == null) {
                 ResponseResult<String> result = ResponseResult.fail("档案不存在");
-                return ResponseEntity.status(HttpStatus.OK).body(result);
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
             }
 
-            // 根据文件路径获取文件资源
+            // 根据文件路径获取文件
             String filePath = archiveInfo.getFilePath();
-            FileSystemResource fileResource = new FileSystemResource(filePath);
+            File file = new File(filePath);
 
-            if (!fileResource.exists()) {
+            if (!file.exists()) {
                 String errorMsg = "文件不存在：" + filePath;
                 ResponseResult<String> result = ResponseResult.fail(errorMsg);
-                return ResponseEntity.status(HttpStatus.OK).body(result);
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
             }
 
             // 获取文件名和后缀
@@ -200,16 +235,33 @@ public class ArchiveInfoController {
             }
 
             // 设置文件大小
-            headers.setContentLength(fileResource.contentLength());
+            headers.setContentLength(file.length());
 
-            // 使用 InputStreamResource 避免 Spring 覆盖 Content-Disposition 响应头
-            InputStreamResource inputStreamResource = new InputStreamResource(fileResource.getInputStream());
+            // 使用StreamingResponseBody实现流式传输，避免一次性加载大文件到内存
+            StreamingResponseBody responseBody = outputStream -> {
+                try (FileInputStream fileInputStream = new FileInputStream(file);
+                     BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
+                    // 使用缓冲流高效读取大文件
+                    byte[] buffer = new byte[8192];
+                    int bytesRead;
+                    while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                    }
+                    outputStream.flush();
+                }
+            };
 
-            return new ResponseEntity<>(inputStreamResource, headers, HttpStatus.OK);
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(responseBody);
         } catch (Exception e) {
             String errorMsg = "预览失败：" + e.getMessage();
             ResponseResult<String> result = ResponseResult.fail(errorMsg);
-            return ResponseEntity.status(HttpStatus.OK).body(result);
+            StreamingResponseBody responseBody = outputStream -> {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.writeValue(outputStream, result);
+            };
+            return ResponseEntity.status(HttpStatus.OK).body(responseBody);
         }
     }
 

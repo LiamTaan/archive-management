@@ -2,11 +2,35 @@ server:
   port: 8080
   servlet:
     context-path: /archive
+    # 配置Servlet请求超时时间（毫秒）
+    session:
+      timeout: 3600s
   # 启用Gzip压缩
   compression:
     enabled: true
     mime-types: text/html,text/xml,text/plain,text/css,text/javascript,application/javascript,application/json
     min-response-size: 2048
+  # Tomcat配置
+  tomcat:
+    # 调整Tomcat的最大连接数
+    max-connections: 10000
+    # 调整Tomcat的线程池大小
+    threads:
+      max: 200
+      min-spare: 50
+    # 调整Tomcat的响应缓冲区大小
+    max-swallow-size: -1
+    # 调整Tomcat的连接超时时间
+    connection-timeout: 3600000
+  # 配置异步请求超时时间
+  netty:
+    connection-timeout: 3600000
+    read-timeout: 3600000
+    write-timeout: 3600000
+  # Spring MVC异步请求超时时间
+  mvc:
+    async:
+      request-timeout: 3600000
 
 spring:
   application:

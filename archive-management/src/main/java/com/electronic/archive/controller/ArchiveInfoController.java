@@ -700,8 +700,13 @@ public class ArchiveInfoController {
                 return ResponseResult.fail("档案不存在");
             }
 
-            // 获取文件扩展名
-            String fileType = archiveInfo.getFileType().toLowerCase();
+            // 获取文件扩展名，处理带点号的情况（如 ".pptx" 转换为 "pptx"）
+            String rawFileType = archiveInfo.getFileType().toLowerCase();
+            String fileType = rawFileType;
+            if (fileType.startsWith(".")) {
+                fileType = fileType.substring(1);
+            }
+            
             if (!isOfficeFile(fileType)) {
                 return ResponseResult.fail("该文件类型不需要转换");
             }

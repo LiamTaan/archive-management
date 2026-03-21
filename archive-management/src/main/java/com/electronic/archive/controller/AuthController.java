@@ -33,9 +33,6 @@ public class AuthController {
     @Operation(summary = "用户登录")
     @PostMapping("/login")
     public ResponseResult<Map<String, Object>> login(@RequestBody LoginRequest loginRequest) {
-        System.out.println("登录请求：" + loginRequest.getUsername());
-        System.out.println("密码：" + loginRequest.getPassword());
-        
         // 查找用户
         SysUser user = sysUserService.getByUsername(loginRequest.getUsername());
         if (user == null) {

@@ -9,6 +9,7 @@ import org.springframework.security.config.annotation.authentication.configurati
 import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
@@ -37,7 +38,7 @@ public class SecurityConfig {
     public SecurityFilterChain securityFilterChain(HttpSecurity http) throws Exception {
         http
                 // 禁用CSRF
-                .csrf(csrf -> csrf.disable())
+                .csrf(AbstractHttpConfigurer::disable)
                 // 配置CORS
                 .cors(cors -> cors
                         .configurationSource(request -> {
@@ -51,9 +52,30 @@ public class SecurityConfig {
                 )
                 // 禁用会话管理，使用无状态认证
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
-                // 允许所有请求通过，暂时不做权限控制
+                // 配置基于角色的权限控制
                 .authorizeHttpRequests(auth -> auth
-                        .anyRequest().permitAll())
+                        // 允许匿名访问的路径
+                        .requestMatchers("/auth/login").permitAll()
+                        .requestMatchers("/auth/logout").permitAll()
+                        // Swagger文档相关路径，生产环境建议关闭
+                        .requestMatchers("/swagger-ui/**").permitAll()
+                        .requestMatchers("/v3/api-docs/**").permitAll()
+                        // 静态资源
+                        .requestMatchers("/static/**").permitAll()
+                        // 超级管理员权限路径
+                        .requestMatchers("/user/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers("/role/**").hasRole("SUPER_ADMIN")
+                        .requestMatchers("/permission/**").hasRole("SUPER_ADMIN")
+                        // 档案管理员权限路径
+                        .requestMatchers("/archive/**").hasAnyRole("SUPER_ADMIN", "ARCHIVE_ADMIN")
+                        .requestMatchers("/hanging/**").hasAnyRole("SUPER_ADMIN", "ARCHIVE_ADMIN")
+                        .requestMatchers("/batch/**").hasAnyRole("SUPER_ADMIN", "ARCHIVE_ADMIN")
+                        .requestMatchers("/approval/**").hasAnyRole("SUPER_ADMIN", "ARCHIVE_ADMIN")
+                        // 业务操作员权限路径
+                        .requestMatchers("/query/**").hasAnyRole("SUPER_ADMIN", "ARCHIVE_ADMIN", "BUSINESS_OPERATOR")
+                        .requestMatchers("/notification/**").hasAnyRole("SUPER_ADMIN", "ARCHIVE_ADMIN", "BUSINESS_OPERATOR")
+                        // 其他所有请求需要认证
+                        .anyRequest().authenticated())
                 // 配置认证管理器
                 .authenticationManager(authenticationManager(authenticationConfiguration))
                 // 配置密码编码器

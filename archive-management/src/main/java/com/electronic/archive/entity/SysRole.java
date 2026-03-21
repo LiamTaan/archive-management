@@ -18,6 +18,12 @@ public class SysRole {
     private Long roleId;
 
     /**
+     * 角色编码
+     */
+    @TableField("role_code")
+    private String roleCode;
+
+    /**
      * 角色名称
      */
     @TableField("role_name")

@@ -64,7 +64,7 @@ public class SysUserRoleServiceImpl extends ServiceImpl<SysUserRoleMapper, SysUs
             List<SysRole> roles = sysRoleMapper.selectList(queryWrapper);
             List<String> roleNames = new ArrayList<>();
             for (SysRole role : roles) {
-                roleNames.add(role.getRoleName());
+                roleNames.add(role.getRoleCode());
             }
             return roleNames;
         }

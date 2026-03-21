@@ -54,6 +54,9 @@ public class RoleController {
         if (roleQueryDTO.getRoleName() != null && !roleQueryDTO.getRoleName().isEmpty()) {
             queryWrapper.like(SysRole::getRoleName, roleQueryDTO.getRoleName());
         }
+        if (roleQueryDTO.getRoleCode() != null && !roleQueryDTO.getRoleCode().isEmpty()) {
+            queryWrapper.like(SysRole::getRoleCode, roleQueryDTO.getRoleCode());
+        }
         if (roleQueryDTO.getStatus() != null && !roleQueryDTO.getStatus().isEmpty()) {
             queryWrapper.eq(SysRole::getStatus, roleQueryDTO.getStatus());
         }

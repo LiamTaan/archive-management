@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
 import com.electronic.archive.entity.SysUser;
 import com.electronic.archive.mapper.SysUserMapper;
+import com.electronic.archive.service.SysUserRoleService;
 import com.electronic.archive.service.SysUserService;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.core.userdetails.User;
@@ -11,6 +12,8 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.security.core.userdetails.UsernameNotFoundException;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
+
+import java.util.List;
 
 @Service
 public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> implements SysUserService {
@@ -20,6 +23,9 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
     
     @Autowired
     private PasswordEncoder passwordEncoder;
+    
+    @Autowired
+    private SysUserRoleService sysUserRoleService;
 
     @Override
     public SysUser getByUsername(String username) {
@@ -36,10 +42,16 @@ public class SysUserServiceImpl extends ServiceImpl<SysUserMapper, SysUser> impl
             throw new UsernameNotFoundException("用户已禁用");
         }
 
-        // 这里简化处理，实际应该查询用户的角色和权限
+        // 从数据库查询用户的实际角色
+        List<String> roleNames = sysUserRoleService.getRoleNamesByUserId(sysUser.getUserId());
+        if (roleNames == null || roleNames.isEmpty()) {
+            roleNames = List.of("BUSINESS_OPERATOR"); // 默认角色
+        }
+
+        // 构建UserDetails对象，包含用户角色信息
         return User.withUsername(sysUser.getUsername())
                 .password(sysUser.getPassword())
-                .roles("USER") // 临时硬编码角色，后续会从数据库查询
+                .roles(roleNames.toArray(new String[0]))
                 .build();
     }
     

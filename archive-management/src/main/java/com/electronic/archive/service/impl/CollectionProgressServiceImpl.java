@@ -18,7 +18,10 @@ public class CollectionProgressServiceImpl extends ServiceImpl<CollectionProgres
     
     @Override
     public CollectionProgress getByTaskId(String taskId) {
-        return baseMapper.selectByTaskId(taskId);
+        // 使用MyBatis-Plus的lambdaQuery替代自定义的selectByTaskId方法
+        return lambdaQuery()
+                .eq(CollectionProgress::getTaskId, taskId)
+                .one();
     }
     
     @Override

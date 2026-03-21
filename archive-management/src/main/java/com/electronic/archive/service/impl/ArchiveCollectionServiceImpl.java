@@ -15,6 +15,7 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -24,19 +25,15 @@ import org.springframework.web.multipart.MultipartFile;
 
 import com.fasterxml.jackson.core.type.TypeReference;
 import com.fasterxml.jackson.databind.ObjectMapper;
-import java.io.ByteArrayInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.FileOutputStream;
-import java.io.IOException;
+
+import java.io.*;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.security.MessageDigest;
+import java.security.NoSuchAlgorithmException;
 import java.time.LocalDateTime;
-import java.util.ArrayList;
-import java.util.List;
-import java.util.Map;
-import java.util.UUID;
+import java.util.*;
 
 /**
  * 档案采集服务实现类
@@ -313,6 +310,9 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             );
             
             if (!response.getStatusCode().is2xxSuccessful()) {
+                if (response.getStatusCode().value() == 404) {
+                    throw new Exception("获取文件元信息失败：资源不存在（404）");
+                }
                 throw new Exception(String.format("获取文件元信息失败，状态码：%d", 
                         response.getStatusCode().value()));
             }
@@ -329,6 +329,9 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                 );
                 
                 if (!singleResponse.getStatusCode().is2xxSuccessful()) {
+                    if (singleResponse.getStatusCode().value() == 404) {
+                        throw new Exception("获取文件元信息失败：资源不存在（404）");
+                    }
                     throw new Exception(String.format("获取单个文件元信息失败，状态码：%d", 
                             singleResponse.getStatusCode().value()));
                 }
@@ -346,30 +349,20 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             
             log.info("成功获取到{}个文件元信息", fileMetaList.size());
             return fileMetaList;
+        } catch (HttpStatusCodeException e) {
+            // 处理HTTP状态码异常，特别是404
+            log.error("调用第三方接口失败，状态码：{}，URL：{}", e.getStatusCode().value(), config.getMetadataUrl(), e);
+            if (e.getStatusCode().value() == 404) {
+                throw new Exception("获取文件元信息失败：资源不存在（404）");
+            }
+            throw new Exception(String.format("获取文件元信息失败：%s", e.getMessage()));
         } catch (Exception e) {
-            log.info("获取多个文件元信息失败，尝试获取单个文件元信息：{}", e.getMessage());
-            // 如果获取多个文件元信息失败，尝试获取单个文件元信息
-            ResponseEntity<FileMetaDTO> singleResponse = restTemplate.exchange(
-                    config.getMetadataUrl(),
-                    HttpMethod.valueOf(method),
-                    entity,
-                    FileMetaDTO.class
-            );
-            
-            if (!singleResponse.getStatusCode().is2xxSuccessful()) {
-                throw new Exception(String.format("获取单个文件元信息失败，状态码：%d", 
-                        singleResponse.getStatusCode().value()));
+            log.error("获取文件元信息失败，URL：{}", config.getMetadataUrl(), e);
+            // 检查异常消息中是否包含HTML标签，如果包含则返回友好提示
+            if (e.getMessage() != null && (e.getMessage().contains("<!DOCTYPE") || e.getMessage().contains("<html") || e.getMessage().contains("<body"))) {
+                throw new Exception("获取文件元信息失败：第三方接口返回格式异常");
             }
-            
-            FileMetaDTO singleFileMeta = singleResponse.getBody();
-            if (singleFileMeta == null) {
-                throw new Exception("获取文件元信息失败，返回数据为空");
-            }
-            
-            // 将单个文件元信息转换为列表返回
-            List<FileMetaDTO> singleFileList = new ArrayList<>();
-            singleFileList.add(singleFileMeta);
-            return singleFileList;
+            throw e;
         }
     }
     
@@ -660,7 +653,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
      * @return 保存后的文件路径
      * @throws IOException IO异常
      */
-    private String saveFile(MultipartFile file, String uploadType) throws IOException {
+    private Map<String, String> saveFile(MultipartFile file, String uploadType) throws IOException {
         // 确保存储目录存在
         Path storageDir = Paths.get(fileStoragePath, uploadType);
         if (!Files.exists(storageDir)) {
@@ -672,19 +665,51 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
         String fileExtension = StringUtils.getFilenameExtension(originalFilename);
         String fileName = UUID.randomUUID().toString() + "." + fileExtension;
         
-        // 保存文件
+        // 保存文件并计算MD5
         Path filePath = storageDir.resolve(fileName);
-        Files.copy(file.getInputStream(), filePath);
         
-        log.info("文件保存成功：{}", filePath);
-        return filePath.toString();
+        // 计算文件MD5值
+        MessageDigest md = null;
+        try {
+            md = MessageDigest.getInstance("MD5");
+        } catch (NoSuchAlgorithmException e) {
+            log.error("获取MD5算法实例失败：{}", e.getMessage());
+            throw new IOException("获取MD5算法实例失败", e);
+        }
+        
+        // 创建文件输出流
+        try (InputStream inputStream = file.getInputStream();
+             FileOutputStream fos = new FileOutputStream(filePath.toFile())) {
+            byte[] buffer = new byte[8192];
+            int bytesRead;
+            while ((bytesRead = inputStream.read(buffer)) != -1) {
+                md.update(buffer, 0, bytesRead);
+                fos.write(buffer, 0, bytesRead);
+            }
+        }
+        
+        // 生成MD5十六进制字符串
+        byte[] digest = md.digest();
+        StringBuilder sb = new StringBuilder();
+        for (byte b : digest) {
+            sb.append(String.format("%02x", b));
+        }
+        String md5Value = sb.toString();
+        
+        log.info("文件保存成功：{}，MD5：{}", filePath, md5Value);
+        
+        // 返回文件路径和MD5值
+        Map<String, String> result = new HashMap<>();
+        result.put("filePath", filePath.toString());
+        result.put("md5Value", md5Value);
+        return result;
     }
 
     @Override
     public ResponseResult<CollectionResultVO> manualUpload(CollectionRequestDTO requestDTO, List<MultipartFile> files) {
         try {
             // 获取当前登录用户的昵称作为责任人
-            String responsiblePerson = "user";
+            String responsiblePerson = "admin";
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null) {
                 String username = authentication.getName();
@@ -703,11 +728,24 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             // 创建进度记录
             collectionProgressService.createProgress(taskId, 0, totalCount);
             
+            // 解析metadata中的JSON数据
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> metadataMap = new HashMap<>();
+            if (StringUtils.hasText(requestDTO.getMetadata())) {
+                try {
+                    metadataMap = objectMapper.readValue(requestDTO.getMetadata(), new TypeReference<Map<String, Object>>() {});
+                } catch (Exception e) {
+                    log.warn("解析metadata失败，使用默认值：{}", e.getMessage());
+                }
+            }
+            
             for (int i = 0; i < files.size(); i++) {
                 MultipartFile file = files.get(i);
                 try {
-                    // 保存文件到磁盘
-                    String filePath = saveFile(file, "manual");
+                    // 保存文件到磁盘并计算MD5
+                    Map<String, String> saveResult = saveFile(file, "manual");
+                    String filePath = saveResult.get("filePath");
+                    String md5Value = saveResult.get("md5Value");
                     
                     // 记录档案类型ID，用于调试
                     log.info("Archive type ID from request: {}", requestDTO.getArchiveType());
@@ -726,14 +764,15 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setFilePath(filePath);
                     archiveInfo.setFileType("." + StringUtils.getFilenameExtension(file.getOriginalFilename()));
                     archiveInfo.setFileSize(file.getSize());
-                    archiveInfo.setMd5Value("e10adc3949ba59abbe56e057f20f883e"); // 模拟MD5
+                    archiveInfo.setMd5Value(md5Value); // 使用真实计算的MD5值
                     archiveInfo.setArchiveType(archiveTypeName);
                     archiveInfo.setBusinessNo("MANUAL_" + System.currentTimeMillis());
-                    archiveInfo.setBusinessType("手动上传");
-                    archiveInfo.setResponsiblePerson(responsiblePerson);
+                    archiveInfo.setBusinessType(metadataMap.get("businessType") == null ? "" : metadataMap.get("businessType").toString());
+                    archiveInfo.setResponsiblePerson(metadataMap.get("responsiblePerson") == null ? responsiblePerson : metadataMap.get("responsiblePerson").toString());
+                    archiveInfo.setDepartment(metadataMap.get("department") == null ? "" : metadataMap.get("department").toString());
+                    archiveInfo.setRemark(metadataMap.get("remark") == null ? "" : metadataMap.get("remark").toString());
                     archiveInfo.setHangOnType(1);
                     archiveInfo.setStatus(0);
-                    archiveInfo.setRemark("手动上传档案");
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());
 
@@ -807,7 +846,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
     public ResponseResult<CollectionResultVO> batchUpload(CollectionRequestDTO requestDTO, List<MultipartFile> files) {
         try {
             // 获取当前登录用户的昵称作为责任人
-            String responsiblePerson = "user";
+            String responsiblePerson = "admin";
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
             if (authentication != null) {
                 String username = authentication.getName();
@@ -826,11 +865,24 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             // 创建进度记录
             collectionProgressService.createProgress(taskId, 1, totalCount);
             
+            // 解析metadata中的JSON数据
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> metadataMap = null;
+            if (StringUtils.hasText(requestDTO.getMetadata())) {
+                try {
+                    metadataMap = objectMapper.readValue(requestDTO.getMetadata(), new TypeReference<Map<String, Object>>() {});
+                } catch (Exception e) {
+                    log.warn("解析metadata失败，使用默认值：{}", e.getMessage());
+                }
+            }
+            
             for (int i = 0; i < files.size(); i++) {
                 MultipartFile file = files.get(i);
                 try {
-                    // 保存文件到磁盘
-                    String filePath = saveFile(file, "batch");
+                    // 保存文件到磁盘并计算MD5
+                    Map<String, String> saveResult = saveFile(file, "batch");
+                    String filePath = saveResult.get("filePath");
+                    String md5Value = saveResult.get("md5Value");
                     
                     // 记录档案类型ID，用于调试
                     log.info("Archive type ID from request: {}", requestDTO.getArchiveType());
@@ -849,20 +901,21 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setFilePath(filePath);
                     archiveInfo.setFileType("." + StringUtils.getFilenameExtension(file.getOriginalFilename()));
                     archiveInfo.setFileSize(file.getSize());
-                    archiveInfo.setMd5Value("e10adc3949ba59abbe56e057f20f883e"); // 模拟MD5
+                    archiveInfo.setMd5Value(md5Value); // 使用真实计算的MD5值
                     archiveInfo.setArchiveType(archiveTypeName);
                     archiveInfo.setBusinessNo("BATCH_" + System.currentTimeMillis());
-                    archiveInfo.setBusinessType("批量上传");
-                    archiveInfo.setResponsiblePerson(responsiblePerson);
+                    archiveInfo.setBusinessType(metadataMap.get("businessType") == null ? "" : metadataMap.get("businessType").toString());
+                    archiveInfo.setResponsiblePerson(metadataMap.get("responsiblePerson") == null ? responsiblePerson : metadataMap.get("responsiblePerson").toString());
+                    archiveInfo.setDepartment(metadataMap.get("department") == null ? "" : metadataMap.get("department").toString());
+                    archiveInfo.setRemark(metadataMap.get("remark") == null ? "" : metadataMap.get("remark").toString());
                     archiveInfo.setHangOnType(1);
                     archiveInfo.setStatus(0);
-                    archiveInfo.setRemark("批量上传档案");
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());
 
                     archiveInfoService.save(archiveInfo);
                     successCount++;
-                    
+
                     // 记录采集日志
                     collectionLogService.saveCollectionLog(
                             archiveInfo.getId(),
@@ -875,15 +928,15 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                             1, // successCount
                             0 // failCount
                     );
-                    
+
                     // 更新进度
-                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                    collectionProgressService.updateProgress(taskId, i + 1, 0,
                             String.format("已完成 %d/%d 个文件采集", i + 1, totalCount));
                 } catch (Exception e) {
                     log.error("保存文件失败：{}", file.getOriginalFilename(), e);
-                    
+
                     // 更新进度
-                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                    collectionProgressService.updateProgress(taskId, i + 1, 0,
                             String.format("已完成 %d/%d 个文件采集，当前文件失败", i + 1, totalCount));
                 }
             }
@@ -897,19 +950,19 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
 
             // 完成进度
             collectionProgressService.completeProgress(taskId, successCount, totalCount);
-            
+
             log.info("批量上传采集完成，任务ID：{}，结果：{}", taskId, resultVO);
             return ResponseResult.success("批量上传完成", resultVO);
         } catch (Exception e) {
             log.error("批量上传采集失败", e);
             String errorMessage = "批量上传失败：" + e.getMessage();
-            
+
             // 生成任务ID
             String taskId = "BATCH_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
             // 失败进度
             collectionProgressService.createProgress(taskId, 1, 1);
             collectionProgressService.failProgress(taskId, errorMessage);
-            
+
             return ResponseResult.fail("批量上传失败");
         }
     }
@@ -937,11 +990,24 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             // 创建进度记录
             collectionProgressService.createProgress(taskId, 3, totalCount);
             
+            // 解析metadata中的JSON数据
+            ObjectMapper objectMapper = new ObjectMapper();
+            Map<String, Object> metadataMap = null;
+            if (StringUtils.hasText(requestDTO.getMetadata())) {
+                try {
+                    metadataMap = objectMapper.readValue(requestDTO.getMetadata(), new TypeReference<Map<String, Object>>() {});
+                } catch (Exception e) {
+                    log.warn("解析metadata失败，使用默认值：{}", e.getMessage());
+                }
+            }
+            
             for (int i = 0; i < files.size(); i++) {
                 MultipartFile file = files.get(i);
                 try {
-                    // 保存文件到磁盘
-                    String filePath = saveFile(file, "external");
+                    // 保存文件到磁盘并计算MD5
+                    Map<String, String> saveResult = saveFile(file, "external");
+                    String filePath = saveResult.get("filePath");
+                    String md5Value = saveResult.get("md5Value");
                     
                     // 记录档案类型ID，用于调试
                     log.info("Archive type ID from request: {}", requestDTO.getArchiveType());
@@ -960,14 +1026,15 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setFilePath(filePath);
                     archiveInfo.setFileType("." + StringUtils.getFilenameExtension(file.getOriginalFilename()));
                     archiveInfo.setFileSize(file.getSize());
-                    archiveInfo.setMd5Value("e10adc3949ba59abbe56e057f20f883e"); // 模拟MD5
+                    archiveInfo.setMd5Value(md5Value); // 使用真实计算的MD5值
                     archiveInfo.setArchiveType(archiveTypeName);
                     archiveInfo.setBusinessNo("EXTERNAL_" + System.currentTimeMillis());
-                    archiveInfo.setBusinessType("外部导入");
-                    archiveInfo.setResponsiblePerson(responsiblePerson);
+                    archiveInfo.setBusinessType(metadataMap.get("businessType") == null ? "" : metadataMap.get("businessType").toString());
+                    archiveInfo.setResponsiblePerson(metadataMap.get("responsiblePerson") == null ? responsiblePerson : metadataMap.get("responsiblePerson").toString());
+                    archiveInfo.setDepartment(metadataMap.get("department") == null ? "" : metadataMap.get("department").toString());
+                    archiveInfo.setRemark(metadataMap.get("remark") == null ? "" : metadataMap.get("remark").toString());
                     archiveInfo.setHangOnType(1);
                     archiveInfo.setStatus(0);
-                    archiveInfo.setRemark("外部导入档案");
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());
 

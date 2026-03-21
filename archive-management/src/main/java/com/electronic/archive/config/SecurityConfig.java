@@ -64,6 +64,8 @@ public class SecurityConfig {
                         .requestMatchers("/static/**").permitAll()
                         // 文件预览接口
                         .requestMatchers("/info/preview/**").permitAll()
+                        .requestMatchers("/info/download/**").permitAll()
+                        .requestMatchers("/audit-report/download/**").permitAll()
                         // 超级管理员权限路径
                         .requestMatchers("/user/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/role/**").hasRole("SUPER_ADMIN")

@@ -70,4 +70,14 @@ public class ArchiveQueryDTO extends PageRequest {
      * 结束时间（创建时间）
      */
     private LocalDateTime endTime;
+
+    /**
+     * 最小文件大小（字节）
+     */
+    private Long minFileSize;
+
+    /**
+     * 最大文件大小（字节）
+     */
+    private Long maxFileSize;
 }

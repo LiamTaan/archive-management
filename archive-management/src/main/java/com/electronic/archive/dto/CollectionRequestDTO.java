@@ -15,6 +15,21 @@ public class CollectionRequestDTO {
     private Integer archiveType;
 
     /**
+     * 业务类型
+     */
+    private String businessType;
+
+    /**
+     * 责任人
+     */
+    private String responsiblePerson;
+
+    /**
+     * 所属部门
+     */
+    private String department;
+
+    /**
      * 档案路径列表
      */
     private List<String> filePaths;

@@ -8,4 +8,6 @@ import com.electronic.archive.entity.InterfaceConfig;
  */
 public interface InterfaceConfigService extends IService<InterfaceConfig> {
     String getTargetSystemName(String systemCode);
+
+    InterfaceConfig getByInterfaceCode(String systemCode);
 }

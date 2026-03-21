@@ -1,24 +1,26 @@
 package com.electronic.archive.controller;
 
+import com.alibaba.excel.EasyExcel;
+import com.alibaba.excel.support.ExcelTypeEnum;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.electronic.archive.dto.AuditReportQueryDTO;
 import com.electronic.archive.entity.AuditReport;
 import com.electronic.archive.service.AuditReportService;
 import com.electronic.archive.util.PageResult;
 import com.electronic.archive.vo.ResponseResult;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
+import jakarta.servlet.http.HttpServletResponse;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.web.bind.annotation.*;
 
+import java.io.OutputStream;
+import java.net.URLEncoder;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
-import java.util.HashMap;
-import java.io.OutputStream;
-import jakarta.servlet.http.HttpServletResponse;
-import com.alibaba.excel.EasyExcel;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 /**
  * 审计报表控制器
@@ -118,89 +120,54 @@ public class AuditReportController {
     @GetMapping("/download/{id}")
     public void downloadAuditReport(@PathVariable Long id, HttpServletResponse response) {
         try {
-            // 获取报表数据
+            // 1. 校验报表是否存在
             AuditReport report = auditReportService.getById(id);
             if (report == null) {
                 response.sendError(404, "审计报表不存在");
                 return;
             }
-            
-            // 设置响应头
-            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+
+            // 2. 统一设置响应头（XLSX格式）
             response.setCharacterEncoding("UTF-8");
-            String fileName = new String((report.getReportName() + ".xlsx").getBytes("UTF-8"), "ISO-8859-1");
-            response.setHeader("Content-Disposition", "attachment; filename=" + fileName);
-            
-            // 获取报表数据
+            response.setContentType("application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+            String fileName = URLEncoder.encode(report.getReportName() + ".xlsx", "UTF-8");
+            response.setHeader("Content-Disposition", "attachment; filename=\"" + fileName + "\"; filename*=UTF-8''" + fileName);
+            response.setHeader("Pragma", "no-cache");
+            response.setHeader("Cache-Control", "no-cache");
+            response.setDateHeader("Expires", 0);
+
+            // 3. 解析报表数据
             String reportDataJson = report.getReportData();
             ObjectMapper objectMapper = new ObjectMapper();
             Map<String, Object> reportData = objectMapper.readValue(reportDataJson, Map.class);
-            
-            // 创建输出流
+
+            // 4. 准备Excel数据
+            List<List<Object>> data = new ArrayList<>();
+            data.add(Arrays.asList("指标", "数值")); // 标题行
+            addDataRow(data, "总操作数", reportData.get("total"));
+            addDataRow(data, "成功数", reportData.get("success"));
+            addDataRow(data, "失败数", reportData.get("fail"));
+            addDataRow(data, "角色数", reportData.get("roleCount"));
+            addDataRow(data, "权限数", reportData.get("permissionCount"));
+            addDataRow(data, "用户数", reportData.get("userCount"));
+
+            // 5. 写入Excel（关键：不指定class，不手动关闭流）
             OutputStream outputStream = response.getOutputStream();
-            
-            // 使用EasyExcel生成Excel文件
-            EasyExcel.write(outputStream)                
-                // 添加第一个工作表：统计数据
-                .sheet("统计数据")
-                .doWrite(() -> {
-                    List<List<Object>> data = new ArrayList<>();
-                    // 添加标题行
-                    List<Object> titleRow = new ArrayList<>();
-                    titleRow.add("指标");
-                    titleRow.add("数值");
-                    data.add(titleRow);
-                    
-                    // 添加统计数据
-                    if (reportData.containsKey("total")) {
-                        List<Object> row = new ArrayList<>();
-                        row.add("总操作数");
-                        row.add(reportData.get("total"));
-                        data.add(row);
-                    }
-                    if (reportData.containsKey("success")) {
-                        List<Object> row = new ArrayList<>();
-                        row.add("成功数");
-                        row.add(reportData.get("success"));
-                        data.add(row);
-                    }
-                    if (reportData.containsKey("fail")) {
-                        List<Object> row = new ArrayList<>();
-                        row.add("失败数");
-                        row.add(reportData.get("fail"));
-                        data.add(row);
-                    }
-                    if (reportData.containsKey("roleCount")) {
-                        List<Object> row = new ArrayList<>();
-                        row.add("角色数");
-                        row.add(reportData.get("roleCount"));
-                        data.add(row);
-                    }
-                    if (reportData.containsKey("permissionCount")) {
-                        List<Object> row = new ArrayList<>();
-                        row.add("权限数");
-                        row.add(reportData.get("permissionCount"));
-                        data.add(row);
-                    }
-                    if (reportData.containsKey("userCount")) {
-                        List<Object> row = new ArrayList<>();
-                        row.add("用户数");
-                        row.add(reportData.get("userCount"));
-                        data.add(row);
-                    }
-                    return data;
-                });
-            
-            // 关闭输出流
-            outputStream.flush();
-            outputStream.close();
+            EasyExcel.write(outputStream)
+                    .excelType(ExcelTypeEnum.XLSX) // 明确XLSX
+                    .sheet("统计数据")
+                    .doWrite(data);
+            outputStream.flush(); // 只刷新，不关闭
+
         } catch (Exception e) {
             e.printStackTrace();
-            try {
-                response.sendError(500, "下载失败：" + e.getMessage());
-            } catch (Exception ex) {
-                ex.printStackTrace();
-            }
+            // 异常时不要再次操作response，避免覆盖流
+        }
+    }
+
+    private void addDataRow(List<List<Object>> data, String key, Object value) {
+        if (value != null) {
+            data.add(Arrays.asList(key, value));
         }
     }
 }

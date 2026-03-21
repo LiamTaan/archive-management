@@ -37,43 +37,25 @@ public class ArchiveCollectionController {
     @Operation(summary = "手动上传采集")
     @PostMapping(value = "/manual", consumes = "multipart/form-data")
     public ResponseResult<CollectionResultVO> manualUpload(
-            @RequestParam Integer archiveType,
-            @RequestParam String metadata,
-            @RequestParam String operateBy,
+            CollectionRequestDTO collectionRequestDTO,
             @RequestPart List<MultipartFile> files) {
-        CollectionRequestDTO requestDTO = new CollectionRequestDTO();
-        requestDTO.setArchiveType(archiveType);
-        requestDTO.setMetadata(metadata);
-        requestDTO.setOperateBy(operateBy);
-        return archiveCollectionService.manualUpload(requestDTO, files);
+        return archiveCollectionService.manualUpload(collectionRequestDTO, files);
     }
 
     @Operation(summary = "批量上传采集")
     @PostMapping(value = "/batch", consumes = "multipart/form-data")
     public ResponseResult<CollectionResultVO> batchUpload(
-            @RequestParam Integer archiveType,
-            @RequestParam String metadata,
-            @RequestParam String operateBy,
+            CollectionRequestDTO collectionRequestDTO,
             @RequestPart List<MultipartFile> files) {
-        CollectionRequestDTO requestDTO = new CollectionRequestDTO();
-        requestDTO.setArchiveType(archiveType);
-        requestDTO.setMetadata(metadata);
-        requestDTO.setOperateBy(operateBy);
-        return archiveCollectionService.batchUpload(requestDTO, files);
+        return archiveCollectionService.batchUpload(collectionRequestDTO, files);
     }
 
     @Operation(summary = "外部导入采集")
     @PostMapping(value = "/external", consumes = "multipart/form-data")
     public ResponseResult<CollectionResultVO> externalImport(
-            @RequestParam Integer archiveType,
-            @RequestParam String metadata,
-            @RequestParam String operateBy,
+            CollectionRequestDTO collectionRequestDTO,
             @RequestPart List<MultipartFile> files) {
-        CollectionRequestDTO requestDTO = new CollectionRequestDTO();
-        requestDTO.setArchiveType(archiveType);
-        requestDTO.setMetadata(metadata);
-        requestDTO.setOperateBy(operateBy);
-        return archiveCollectionService.externalImport(requestDTO, files);
+        return archiveCollectionService.externalImport(collectionRequestDTO, files);
     }
     
     @Operation(summary = "查询采集进度")

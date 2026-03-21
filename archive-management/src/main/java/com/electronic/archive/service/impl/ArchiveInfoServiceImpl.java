@@ -23,19 +23,7 @@ public class ArchiveInfoServiceImpl extends ServiceImpl<ArchiveInfoMapper, Archi
         // 创建查询条件
         LambdaQueryWrapper<ArchiveInfo> queryWrapper = new LambdaQueryWrapper<>();
         
-        // 指定查询字段，避免查询所有字段
-        queryWrapper.select(
-            ArchiveInfo::getId,
-            ArchiveInfo::getFileName,
-            ArchiveInfo::getFileType,
-            ArchiveInfo::getArchiveType,
-            ArchiveInfo::getBusinessNo,
-            ArchiveInfo::getResponsiblePerson,
-            ArchiveInfo::getDepartment,
-            ArchiveInfo::getStatus,
-            ArchiveInfo::getHangOnType,
-            ArchiveInfo::getCreateTime
-        );
+        // 不需要明确指定查询字段，MyBatis Plus会查询所有字段，确保所有属性都能正确返回
         
         // 档案ID查询
         if (queryDTO.getId() != null) {
@@ -94,6 +82,15 @@ public class ArchiveInfoServiceImpl extends ServiceImpl<ArchiveInfoMapper, Archi
             queryWrapper.ge(ArchiveInfo::getCreateTime, queryDTO.getStartTime());
         } else if (queryDTO.getEndTime() != null) {
             queryWrapper.le(ArchiveInfo::getCreateTime, queryDTO.getEndTime());
+        }
+        
+        // 文件大小范围查询
+        if (queryDTO.getMinFileSize() != null && queryDTO.getMaxFileSize() != null) {
+            queryWrapper.between(ArchiveInfo::getFileSize, queryDTO.getMinFileSize(), queryDTO.getMaxFileSize());
+        } else if (queryDTO.getMinFileSize() != null) {
+            queryWrapper.ge(ArchiveInfo::getFileSize, queryDTO.getMinFileSize());
+        } else if (queryDTO.getMaxFileSize() != null) {
+            queryWrapper.le(ArchiveInfo::getFileSize, queryDTO.getMaxFileSize());
         }
         
         // 按创建时间倒序排序

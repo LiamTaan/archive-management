@@ -20,4 +20,11 @@ public class InterfaceConfigServiceImpl extends ServiceImpl<InterfaceConfigMappe
                 .one();
         return interfaceConfig != null ? interfaceConfig.getBusinessSystem() : "未知系统";
     }
+
+    @Override
+    public InterfaceConfig getByInterfaceCode(String systemCode) {
+        return this.lambdaQuery()
+                .eq(InterfaceConfig::getInterfaceCode, systemCode)
+                .one();
+    }
 }

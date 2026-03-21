@@ -15,9 +15,10 @@ public interface HangOnManagementService {
     /**
      * 自动挂接档案
      * @param archiveId 档案ID
+     * @param systemCode 目标系统代码
      * @return 挂接结果
      */
-    boolean autoHangOn(Long archiveId);
+    boolean autoHangOn(Long archiveId, String systemCode);
 
     /**
      * 手动挂接档案

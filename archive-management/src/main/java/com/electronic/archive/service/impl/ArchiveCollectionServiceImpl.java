@@ -66,6 +66,12 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
     @Autowired
     private CollectionProgressService collectionProgressService;
     
+    @Autowired
+    private NotificationService notificationService;
+    
+    @Autowired
+    private HangOnManagementService hangOnManagementService;
+
     // 文件存储路径，可在application.yml中配置
     @Value("${archive.file.storage.path:D:/archive-files}")
     private String fileStoragePath;
@@ -128,21 +134,9 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                             0
                     );
                     
-                    // 生成挂接日志
-                    HangOnLog hangOnLog = new HangOnLog();
-                    hangOnLog.setArchiveId(archiveId);
-                    hangOnLog.setOperateBy("system");
-                    hangOnLog.setCreateTime(LocalDateTime.now());
-                    hangOnLog.setHangOnType(0); // 0表示挂接
-                    hangOnLog.setDescription(String.format("自动挂接成功 [方式: manual, 目标系统编码：%s,目标系统: %s]",
-                            interfaceConfig.getInterfaceCode(),interfaceConfig.getInterfaceCode()));
-                    hangOnLog.setResult(1); // 1表示成功
-                    hangOnLog.setErrorInfo(null);
-                    hangOnLog.setRemark("自动接口采集挂接");
-                    
-                    // 保存挂接日志
-                    hangOnLogService.save(hangOnLog);
-                    log.info("挂接日志生成成功，档案ID：{}", archiveId);
+                    // 调用自动挂接服务
+                    hangOnManagementService.autoHangOn(archiveId,interfaceConfig.getInterfaceCode());
+                    log.info("自动挂接成功，档案ID：{}", archiveId);
                     
                     // 更新进度
                     collectionProgressService.updateProgress(taskId, i + 1, 0, 

@@ -26,7 +26,7 @@ public class HangOnManagementController {
     @Operation(summary = "自动挂接档案")
     @PostMapping("/auto/{archiveId}")
     public ResponseResult<Map<String, Boolean>> autoHangOn(@PathVariable Long archiveId) {
-        boolean result = hangOnManagementService.autoHangOn(archiveId);
+        boolean result = hangOnManagementService.autoHangOn(archiveId, "");
         Map<String, Boolean> response = new HashMap<>();
         response.put("success", result);
         return ResponseResult.success("自动挂接完成", response);

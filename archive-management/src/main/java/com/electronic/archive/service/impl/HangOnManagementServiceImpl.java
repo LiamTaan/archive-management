@@ -78,7 +78,7 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
     }
 
     @Override
-    public boolean autoHangOn(Long archiveId) {
+    public boolean autoHangOn(Long archiveId, String systemCode) {
         try {
             // 1. 检查档案是否存在
             ArchiveInfo archiveInfo = archiveInfoService.getById(archiveId);
@@ -88,7 +88,6 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             }
             
             // 2. 检查是否已挂接相同系统
-            String systemCode = "target-system"; // 自动挂接使用固定系统代码
             if (isArchiveHangedOnSystem(archiveId, systemCode)) {
                 log.error("自动挂接失败，档案ID：{}，已挂接该系统", archiveId);
                 return false;
@@ -139,7 +138,7 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             }
 
             // 5. 记录挂接日志（0-挂接，1-修改，2-解除）
-            HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, "system", "auto", "target-system", 
+            HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, "system", "auto", systemCode,
                                           hookResult ? "自动挂接成功" : "自动挂接失败", 
                                           hookResult ? null : "模拟挂接失败");
             hangOnLogMapper.insert(hangOnLog);

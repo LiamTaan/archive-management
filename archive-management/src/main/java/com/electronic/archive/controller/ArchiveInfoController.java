@@ -134,20 +134,21 @@ public class ArchiveInfoController {
             // 设置为attachment，让浏览器提示下载文件
             headers.setContentDispositionFormData("attachment", actualFileName);
 
-            // 设置文件大小
-            headers.setContentLength(file.length());
-
             // 使用StreamingResponseBody实现流式传输，避免一次性加载大文件到内存
             StreamingResponseBody responseBody = outputStream -> {
                 try (FileInputStream fileInputStream = new FileInputStream(file);
                      BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
-                    // 使用缓冲流高效读取大文件
-                    byte[] buffer = new byte[8192];
+                    // 增大缓冲区大小以提高传输效率，适应大文件传输
+                    byte[] buffer = new byte[1024 * 1024]; // 1MB缓冲区
                     int bytesRead;
                     while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
                         outputStream.write(buffer, 0, bytesRead);
+                        // 刷新输出流，确保数据及时发送
+                        outputStream.flush();
                     }
-                    outputStream.flush();
+                } catch (IOException e) {
+                    // 记录错误日志，但不抛出异常，避免影响响应
+                    System.err.println("文件传输错误: " + e.getMessage());
                 }
             };
 
@@ -234,20 +235,21 @@ public class ArchiveInfoController {
                 headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
             }
 
-            // 设置文件大小
-            headers.setContentLength(file.length());
-
             // 使用StreamingResponseBody实现流式传输，避免一次性加载大文件到内存
             StreamingResponseBody responseBody = outputStream -> {
                 try (FileInputStream fileInputStream = new FileInputStream(file);
                      BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
-                    // 使用缓冲流高效读取大文件
-                    byte[] buffer = new byte[8192];
+                    // 增大缓冲区大小以提高传输效率，适应大文件传输
+                    byte[] buffer = new byte[1024 * 1024]; // 1MB缓冲区
                     int bytesRead;
                     while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
                         outputStream.write(buffer, 0, bytesRead);
+                        // 刷新输出流，确保数据及时发送
+                        outputStream.flush();
                     }
-                    outputStream.flush();
+                } catch (IOException e) {
+                    // 记录错误日志，但不抛出异常，避免影响响应
+                    System.err.println("文件传输错误: " + e.getMessage());
                 }
             };
 

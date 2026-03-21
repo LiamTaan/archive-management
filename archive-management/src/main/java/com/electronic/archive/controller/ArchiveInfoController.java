@@ -488,8 +488,13 @@ public class ArchiveInfoController {
                 return ResponseResult.fail("文件不存在: " + filePath);
             }
 
-            // 获取文件扩展名
-            String fileType = archiveInfo.getFileType().toLowerCase();
+            // 获取文件扩展名，处理带点号的情况（如 ".pptx" 转换为 "pptx"）
+            String rawFileType = archiveInfo.getFileType().toLowerCase();
+            String fileType = rawFileType;
+            if (fileType.startsWith(".")) {
+                fileType = fileType.substring(1);
+            }
+            
             String previewType = "default"; // 默认类型
             boolean needConvert = false;
             int convertStatus = 0;

@@ -63,6 +63,9 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
     @Autowired
     private RestTemplate restTemplate;
     
+    @Autowired
+    private CollectionProgressService collectionProgressService;
+    
     // 文件存储路径，可在application.yml中配置
     @Value("${archive.file.storage.path:D:/archive-files}")
     private String fileStoragePath;
@@ -76,6 +79,9 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
         int successCount = 0;
         int failCount = 0;
         String failureReason = null;
+        
+        // 生成任务ID
+        String taskId = "AUTO_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
         
         try {
             // 1. 获取接口配置信息
@@ -97,8 +103,12 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             List<FileMetaDTO> fileMetaList = getFileMetaList(interfaceConfig);
             totalCount = fileMetaList.size();
             
+            // 创建进度记录
+            collectionProgressService.createProgress(taskId, 2, totalCount);
+            
             // 3. 遍历文件元信息，执行分片传输采集
-            for (FileMetaDTO fileMeta : fileMetaList) {
+            for (int i = 0; i < fileMetaList.size(); i++) {
+                FileMetaDTO fileMeta = fileMetaList.get(i);
                 try {
                     // 执行单个文件的分片采集
                     Long archiveId = collectLargeFile(interfaceConfig, fileMeta);
@@ -133,6 +143,10 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     // 保存挂接日志
                     hangOnLogService.save(hangOnLog);
                     log.info("挂接日志生成成功，档案ID：{}", archiveId);
+                    
+                    // 更新进度
+                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                            String.format("已完成 %d/%d 个文件采集", i + 1, totalCount));
                 } catch (Exception e) {
                     failCount++;
                     String fileFailureReason = String.format("文件采集失败，文件名：%s，原因：%s", 
@@ -152,6 +166,10 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                             0,
                             1
                     );
+                    
+                    // 更新进度
+                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                            String.format("已完成 %d/%d 个文件采集，当前文件失败", i + 1, totalCount));
                 }
             }
 
@@ -161,8 +179,12 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             resultVO.setSuccessCount(successCount);
             resultVO.setFailCount(failCount);
             resultVO.setDescription(String.format("自动采集完成，成功：%d，失败：%d", successCount, failCount));
+            resultVO.setTaskId(taskId); // 添加任务ID
 
-            log.info("自动接口采集完成，接口ID：{}，结果：{}", interfaceId, resultVO);
+            // 完成进度
+            collectionProgressService.completeProgress(taskId, successCount, totalCount);
+            
+            log.info("自动接口采集完成，接口ID：{}，任务ID：{}，结果：{}", interfaceId, taskId, resultVO);
             return ResponseResult.success("自动采集完成", resultVO);
         } catch (Exception e) {
             failCount = totalCount > 0 ? totalCount : 1;
@@ -181,6 +203,9 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     successCount,
                     failCount
             );
+            
+            // 失败进度
+            collectionProgressService.failProgress(taskId, failureReason);
             
             return ResponseResult.fail(failureReason);
         }
@@ -678,7 +703,14 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             int totalCount = files.size();
             int successCount = 0;
             
-            for (MultipartFile file : files) {
+            // 生成任务ID
+            String taskId = "MANUAL_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+            
+            // 创建进度记录
+            collectionProgressService.createProgress(taskId, 0, totalCount);
+            
+            for (int i = 0; i < files.size(); i++) {
+                MultipartFile file = files.get(i);
                 try {
                     // 保存文件到磁盘
                     String filePath = saveFile(file, "manual");
@@ -726,6 +758,10 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                             1, // successCount
                             0 // failCount
                     );
+                    
+                    // 更新进度
+                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                            String.format("已完成 %d/%d 个文件采集", i + 1, totalCount));
                 } catch (Exception e) {
                     log.error("保存文件失败：{}", file.getOriginalFilename(), e);
                     // 记录采集日志（失败）
@@ -740,6 +776,10 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                             0, // successCount
                             1 // failCount
                     );
+                    
+                    // 更新进度
+                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                            String.format("已完成 %d/%d 个文件采集，当前文件失败", i + 1, totalCount));
                 }
             }
 
@@ -748,11 +788,23 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             resultVO.setSuccessCount(successCount);
             resultVO.setFailCount(totalCount - successCount);
             resultVO.setDescription("手动上传采集完成");
+            resultVO.setTaskId(taskId); // 添加任务ID
 
-            log.info("手动上传采集完成，结果：{}", resultVO);
+            // 完成进度
+            collectionProgressService.completeProgress(taskId, successCount, totalCount);
+            
+            log.info("手动上传采集完成，任务ID：{}，结果：{}", taskId, resultVO);
             return ResponseResult.success("手动上传完成", resultVO);
         } catch (Exception e) {
             log.error("手动上传采集失败", e);
+            String errorMessage = "手动上传失败：" + e.getMessage();
+            
+            // 生成任务ID
+            String taskId = "MANUAL_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+            // 失败进度
+            collectionProgressService.createProgress(taskId, 0, 1);
+            collectionProgressService.failProgress(taskId, errorMessage);
+            
             return ResponseResult.fail("手动上传失败");
         }
     }
@@ -774,7 +826,14 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             int totalCount = files.size();
             int successCount = 0;
             
-            for (MultipartFile file : files) {
+            // 生成任务ID
+            String taskId = "BATCH_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+            
+            // 创建进度记录
+            collectionProgressService.createProgress(taskId, 1, totalCount);
+            
+            for (int i = 0; i < files.size(); i++) {
+                MultipartFile file = files.get(i);
                 try {
                     // 保存文件到磁盘
                     String filePath = saveFile(file, "batch");
@@ -822,8 +881,16 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                             1, // successCount
                             0 // failCount
                     );
+                    
+                    // 更新进度
+                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                            String.format("已完成 %d/%d 个文件采集", i + 1, totalCount));
                 } catch (Exception e) {
                     log.error("保存文件失败：{}", file.getOriginalFilename(), e);
+                    
+                    // 更新进度
+                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                            String.format("已完成 %d/%d 个文件采集，当前文件失败", i + 1, totalCount));
                 }
             }
 
@@ -832,11 +899,23 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             resultVO.setSuccessCount(successCount);
             resultVO.setFailCount(totalCount - successCount);
             resultVO.setDescription("批量上传采集完成");
+            resultVO.setTaskId(taskId); // 添加任务ID
 
-            log.info("批量上传采集完成，结果：{}", resultVO);
+            // 完成进度
+            collectionProgressService.completeProgress(taskId, successCount, totalCount);
+            
+            log.info("批量上传采集完成，任务ID：{}，结果：{}", taskId, resultVO);
             return ResponseResult.success("批量上传完成", resultVO);
         } catch (Exception e) {
             log.error("批量上传采集失败", e);
+            String errorMessage = "批量上传失败：" + e.getMessage();
+            
+            // 生成任务ID
+            String taskId = "BATCH_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+            // 失败进度
+            collectionProgressService.createProgress(taskId, 1, 1);
+            collectionProgressService.failProgress(taskId, errorMessage);
+            
             return ResponseResult.fail("批量上传失败");
         }
     }
@@ -858,7 +937,14 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             int totalCount = files.size();
             int successCount = 0;
             
-            for (MultipartFile file : files) {
+            // 生成任务ID
+            String taskId = "EXTERNAL_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+            
+            // 创建进度记录
+            collectionProgressService.createProgress(taskId, 3, totalCount);
+            
+            for (int i = 0; i < files.size(); i++) {
+                MultipartFile file = files.get(i);
                 try {
                     // 保存文件到磁盘
                     String filePath = saveFile(file, "external");
@@ -906,8 +992,16 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                             1, // successCount
                             0 // failCount
                     );
+                    
+                    // 更新进度
+                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                            String.format("已完成 %d/%d 个文件采集", i + 1, totalCount));
                 } catch (Exception e) {
                     log.error("保存文件失败：{}", file.getOriginalFilename(), e);
+                    
+                    // 更新进度
+                    collectionProgressService.updateProgress(taskId, i + 1, 0, 
+                            String.format("已完成 %d/%d 个文件采集，当前文件失败", i + 1, totalCount));
                 }
             }
 
@@ -916,11 +1010,23 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
             resultVO.setSuccessCount(successCount);
             resultVO.setFailCount(totalCount - successCount);
             resultVO.setDescription("外部导入采集完成");
+            resultVO.setTaskId(taskId); // 添加任务ID
 
-            log.info("外部导入采集完成，结果：{}", resultVO);
+            // 完成进度
+            collectionProgressService.completeProgress(taskId, successCount, totalCount);
+            
+            log.info("外部导入采集完成，任务ID：{}，结果：{}", taskId, resultVO);
             return ResponseResult.success("外部导入完成", resultVO);
         } catch (Exception e) {
             log.error("外部导入采集失败", e);
+            String errorMessage = "外部导入失败：" + e.getMessage();
+            
+            // 生成任务ID
+            String taskId = "EXTERNAL_" + System.currentTimeMillis() + "_" + UUID.randomUUID().toString().substring(0, 8);
+            // 失败进度
+            collectionProgressService.createProgress(taskId, 3, 1);
+            collectionProgressService.failProgress(taskId, errorMessage);
+            
             return ResponseResult.fail("外部导入失败");
         }
     }

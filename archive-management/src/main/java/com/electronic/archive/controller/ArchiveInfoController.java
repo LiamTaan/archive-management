@@ -490,7 +490,7 @@ public class ArchiveInfoController {
 
             // 获取文件扩展名
             String fileType = archiveInfo.getFileType().toLowerCase();
-            String previewType = fileType;
+            String previewType = "default"; // 默认类型
             boolean needConvert = false;
             int convertStatus = 0;
 
@@ -506,6 +506,9 @@ public class ArchiveInfoController {
                 previewType = "image";
             } else if ("pdf".equals(fileType)) {
                 previewType = "pdf";
+            } else {
+                // 其他文件类型，使用传统预览方式
+                previewType = "default";
             }
 
             // 生成预览基础信息

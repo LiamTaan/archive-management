@@ -155,7 +155,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     
                     // 记录采集日志（失败）
                     collectionLogService.saveCollectionLog(
-                            null,
+                            11111111L,
                             2, // 接口采集
                             "system",
                             String.format("自动接口采集档案，来源：%s，文件名：%s", 
@@ -766,7 +766,7 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     log.error("保存文件失败：{}", file.getOriginalFilename(), e);
                     // 记录采集日志（失败）
                     collectionLogService.saveCollectionLog(
-                            null, // 档案ID为null，因为保存失败
+                            11111111111L, // 档案ID为null，因为保存失败
                             0, // 手动采集
                             responsiblePerson,
                             String.format("手动上传档案：%s", file.getOriginalFilename()),

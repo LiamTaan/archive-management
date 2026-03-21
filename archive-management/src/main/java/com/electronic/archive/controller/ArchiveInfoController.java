@@ -685,46 +685,6 @@ public class ArchiveInfoController {
         }
     }
     
-    /**
-     * Office文件转换接口
-     * 触发Office文件转换为PDF，支持异步转换
-     * @param id 档案ID
-     * @return 转换状态
-     */
-    @PostMapping("/preview/convert")
-    @Operation(summary = "Office文件转换", description = "触发Office文件转换为PDF，支持异步转换")
-    public ResponseResult<Map<String, Object>> convertOfficeToPdf(@RequestParam Long id) {
-        try {
-            ArchiveInfo archiveInfo = archiveInfoService.getById(id);
-            if (archiveInfo == null) {
-                return ResponseResult.fail("档案不存在");
-            }
-
-            // 获取文件扩展名，处理带点号的情况（如 ".pptx" 转换为 "pptx"）
-            String rawFileType = archiveInfo.getFileType().toLowerCase();
-            String fileType = rawFileType;
-            if (fileType.startsWith(".")) {
-                fileType = fileType.substring(1);
-            }
-            
-            if (!isOfficeFile(fileType)) {
-                return ResponseResult.fail("该文件类型不需要转换");
-            }
-
-            // 这里实现Office文件转换为PDF的逻辑
-            // 实际实现需要使用Office转换库（如Apache POI、LibreOffice等）
-            // 这里只是示例，返回转换状态
-            Map<String, Object> result = new HashMap<>();
-            result.put("fileId", archiveInfo.getId());
-            result.put("status", "converting"); // 转换中
-            result.put("message", "转换请求已提交");
-
-            return ResponseResult.success("转换请求已提交", result);
-        } catch (Exception e) {
-            return ResponseResult.fail("转换请求失败: " + e.getMessage());
-        }
-    }
-    
     // ------------------------------ 辅助方法 ------------------------------
     
     /**

@@ -58,10 +58,12 @@ public class SecurityConfig {
                         .requestMatchers("/auth/login").permitAll()
                         .requestMatchers("/auth/logout").permitAll()
                         // Swagger文档相关路径，生产环境建议关闭
-                        .requestMatchers("/swagger-ui/**").permitAll()
+//                        .requestMatchers("/swagger-ui/**").permitAll()
                         .requestMatchers("/v3/api-docs/**").permitAll()
                         // 静态资源
                         .requestMatchers("/static/**").permitAll()
+                        // 文件预览接口
+                        .requestMatchers("/info/preview/**").permitAll()
                         // 超级管理员权限路径
                         .requestMatchers("/user/**").hasRole("SUPER_ADMIN")
                         .requestMatchers("/role/**").hasRole("SUPER_ADMIN")

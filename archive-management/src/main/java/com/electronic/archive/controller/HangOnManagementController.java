@@ -23,14 +23,6 @@ public class HangOnManagementController {
     @Autowired
     private HangOnManagementService hangOnManagementService;
 
-    @Operation(summary = "自动挂接档案")
-    @PostMapping("/auto/{archiveId}")
-    public ResponseResult<Map<String, Boolean>> autoHangOn(@PathVariable Long archiveId) {
-        boolean result = hangOnManagementService.autoHangOn(archiveId, "");
-        Map<String, Boolean> response = new HashMap<>();
-        response.put("success", result);
-        return ResponseResult.success("自动挂接完成", response);
-    }
 
     @Operation(summary = "手动挂接档案")
     @PostMapping("/manual/{archiveId}")
@@ -60,15 +52,6 @@ public class HangOnManagementController {
         return ResponseResult.success("解除挂接完成", response);
     }
 
-    @Operation(summary = "重试挂接失败的档案")
-    @PostMapping("/retry/{archiveId}")
-    public ResponseResult<Map<String, Boolean>> retryHangOn(@PathVariable Long archiveId,
-                                                          @RequestParam(required = false, defaultValue = "user") String operateBy) {
-        boolean result = hangOnManagementService.retryHangOn(archiveId, operateBy);
-        Map<String, Boolean> response = new HashMap<>();
-        response.put("success", result);
-        return ResponseResult.success("重试挂接完成", response);
-    }
 
     @Operation(summary = "获取档案挂接关系")
     @GetMapping("/relations/{archiveId}")

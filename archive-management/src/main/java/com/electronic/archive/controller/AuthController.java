@@ -63,28 +63,6 @@ public class AuthController {
         return ResponseResult.success("注销成功");
     }
 
-    @Operation(summary = "获取当前用户信息")
-    @GetMapping("/currentUser")
-    public ResponseResult<Map<String, Object>> getCurrentUser() {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        if (authentication == null) {
-            return ResponseResult.fail("用户未登录");
-        }
-
-        String username = authentication.getName();
-        SysUser user = sysUserService.getByUsername(username);
-
-        Map<String, Object> userInfo = Map.of(
-                "userId", user.getUserId(),
-                "username", user.getUsername(),
-                "nickname", user.getNickname(),
-                "email", user.getEmail(),
-                "phone", user.getPhone()
-        );
-
-        return ResponseResult.success("获取用户信息成功", userInfo);
-    }
-    
     /**
      * 修改用户密码
      * @param request 请求参数，包含旧密码和新密码

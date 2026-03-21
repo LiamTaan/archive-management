@@ -64,14 +64,5 @@ public class CollectionLogController {
         return ResponseResult.success("查询采集日志成功", result);
     }
 
-    @Operation(summary = "根据ID查询采集日志详情")
-    @GetMapping("/{logId}")
-    public ResponseResult<CollectionLog> getCollectionLogDetail(@PathVariable Long logId) {
-        CollectionLog log = collectionLogService.getById(logId);
-        if (log != null) {
-            return ResponseResult.success("查询采集日志详情成功", log);
-        } else {
-            return ResponseResult.fail("采集日志不存在");
-        }
-    }
+
 }

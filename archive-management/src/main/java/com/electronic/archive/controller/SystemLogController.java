@@ -64,14 +64,5 @@ public class SystemLogController {
         return ResponseResult.success("查询系统日志成功", result);
     }
 
-    @Operation(summary = "根据ID查询系统日志详情")
-    @GetMapping("/{logId}")
-    public ResponseResult<SystemLog> getSystemLogDetail(@PathVariable Long logId) {
-        SystemLog log = systemLogService.getById(logId);
-        if (log != null) {
-            return ResponseResult.success("查询系统日志详情成功", log);
-        } else {
-            return ResponseResult.fail("系统日志不存在");
-        }
-    }
+
 }

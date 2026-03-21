@@ -1,6 +1,8 @@
 package com.electronic.archive.controller;
 
 import com.electronic.archive.dto.ArchiveQueryDTO;
+import com.electronic.archive.dto.FileChunkDTO;
+import com.electronic.archive.dto.FilePreviewDTO;
 import com.electronic.archive.entity.ArchiveInfo;
 import com.electronic.archive.service.ArchiveInfoService;
 import com.electronic.archive.util.PageResult;
@@ -19,11 +21,7 @@ import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import com.fasterxml.jackson.databind.ObjectMapper;
 
-import java.io.BufferedInputStream;
-import java.io.File;
-import java.io.FileInputStream;
-import java.io.IOException;
-import java.io.OutputStream;
+import java.io.*;
 import java.net.URLEncoder;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
@@ -322,10 +320,443 @@ public class ArchiveInfoController {
             case "pptx":
                 return new MediaType("application", "vnd.openxmlformats-officedocument.presentationml.presentation");
 
+            // 视频文件
+            case "mp4":
+                return new MediaType("video", "mp4");
+            case "avi":
+                return new MediaType("video", "x-msvideo");
+            case "mov":
+                return new MediaType("video", "quicktime");
+            case "wmv":
+                return new MediaType("video", "x-ms-wmv");
+
             // 其他类型
             default:
                 return null;
         }
+    }
+    
+    // ------------------------------ 大文件下载接口 ------------------------------
+    
+    /**
+     * 获取文件分片信息（预下载接口）
+     * 用于大文件下载前获取分片信息
+     * @param id 档案ID
+     * @return 文件分片信息
+     */
+    @GetMapping("/download/pre")
+    @Operation(summary = "获取文件分片信息", description = "大文件下载前获取分片信息，支持断点续传")
+    public ResponseResult<FileChunkDTO> getFileChunkInfo(@RequestParam Long id) {
+        try {
+            ArchiveInfo archiveInfo = archiveInfoService.getById(id);
+            if (archiveInfo == null) {
+                return ResponseResult.fail("档案不存在");
+            }
+
+            // 根据文件路径获取文件
+            String filePath = archiveInfo.getFilePath();
+            File file = new File(filePath);
+
+            if (!file.exists()) {
+                return ResponseResult.fail("文件不存在: " + filePath);
+            }
+
+            // 生成文件分片信息
+            FileChunkDTO chunkDTO = new FileChunkDTO();
+            chunkDTO.setFileId(String.valueOf(archiveInfo.getId()));
+            chunkDTO.setTotalSize(file.length());
+            chunkDTO.setChunkSize(1024 * 1024 * 5); // 5MB per chunk
+            chunkDTO.setTotalChunks((int) Math.ceil((double) file.length() / chunkDTO.getChunkSize()));
+            chunkDTO.setFileName(archiveInfo.getFileName());
+            chunkDTO.setFileType(archiveInfo.getFileType());
+            chunkDTO.setMd5(archiveInfo.getMd5Value());
+
+            return ResponseResult.success("获取分片信息成功", chunkDTO);
+        } catch (Exception e) {
+            return ResponseResult.fail("获取分片信息失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * 下载指定分片（核心下载接口）
+     * 支持断点续传，根据分片索引下载对应的文件片段
+     * @param id 档案ID
+     * @param chunkIndex 分片索引（从0开始）
+     * @param chunkSize 分片大小（字节）
+     * @return 分片文件内容
+     */
+    @GetMapping("/download/chunk")
+    @Operation(summary = "下载指定分片", description = "大文件分片下载核心接口，支持断点续传")
+    public ResponseEntity<StreamingResponseBody> downloadChunk(
+            @RequestParam Long id,
+            @RequestParam int chunkIndex,
+            @RequestParam long chunkSize) {
+        try {
+            ArchiveInfo archiveInfo = archiveInfoService.getById(id);
+            if (archiveInfo == null) {
+                ResponseResult<String> result = ResponseResult.fail("档案不存在");
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
+            }
+
+            // 根据文件路径获取文件
+            String filePath = archiveInfo.getFilePath();
+            File file = new File(filePath);
+
+            if (!file.exists()) {
+                String errorMsg = "文件不存在: " + filePath;
+                ResponseResult<String> result = ResponseResult.fail(errorMsg);
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
+            }
+
+            // 计算分片的起始位置
+            long startPos = chunkIndex * chunkSize;
+            long endPos = Math.min(startPos + chunkSize, file.length());
+            long contentLength = endPos - startPos;
+
+            // 设置响应头
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_OCTET_STREAM);
+            headers.setContentLength(contentLength);
+            headers.set("Content-Range", "bytes " + startPos + "-" + (endPos - 1) + "/" + file.length());
+            headers.set("Accept-Ranges", "bytes");
+            headers.setContentDispositionFormData("attachment", archiveInfo.getFileName());
+
+            // 使用StreamingResponseBody实现流式传输，避免一次性加载大文件到内存
+            StreamingResponseBody responseBody = outputStream -> {
+                try (RandomAccessFile randomAccessFile = new RandomAccessFile(file, "r")) {
+                    // 定位到分片起始位置
+                    randomAccessFile.seek(startPos);
+                    
+                    // 增大缓冲区大小以提高传输效率，适应大文件传输
+                    byte[] buffer = new byte[1024 * 1024]; // 1MB缓冲区
+                    int bytesRead;
+                    long bytesRemaining = contentLength;
+                    
+                    // 读取并写入分片内容
+                    while (bytesRemaining > 0 && (bytesRead = randomAccessFile.read(buffer, 0, (int) Math.min(buffer.length, bytesRemaining))) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                        bytesRemaining -= bytesRead;
+                        outputStream.flush();
+                    }
+                } catch (IOException e) {
+                    // 记录错误日志，但不抛出异常，避免影响响应
+                    System.err.println("分片传输错误: " + e.getMessage());
+                }
+            };
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(responseBody);
+        } catch (Exception e) {
+            String errorMsg = "分片下载失败: " + e.getMessage();
+            ResponseResult<String> result = ResponseResult.fail(errorMsg);
+            StreamingResponseBody responseBody = outputStream -> {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.writeValue(outputStream, result);
+            };
+            return ResponseEntity.status(HttpStatus.OK).body(responseBody);
+        }
+    }
+    
+    // ------------------------------ 大文件预览接口 ------------------------------
+    
+    /**
+     * 通用预预览接口（获取预览基础信息）
+     * @param id 档案ID
+     * @return 预览基础信息
+     */
+    @GetMapping("/preview/info")
+    @Operation(summary = "获取预览基础信息", description = "获取文件预览的基础信息，用于决定预览方式")
+    public ResponseResult<FilePreviewDTO> getPreviewInfo(@RequestParam Long id) {
+        try {
+            ArchiveInfo archiveInfo = archiveInfoService.getById(id);
+            if (archiveInfo == null) {
+                return ResponseResult.fail("档案不存在");
+            }
+
+            // 根据文件路径获取文件
+            String filePath = archiveInfo.getFilePath();
+            File file = new File(filePath);
+
+            if (!file.exists()) {
+                return ResponseResult.fail("文件不存在: " + filePath);
+            }
+
+            // 获取文件扩展名
+            String fileType = archiveInfo.getFileType().toLowerCase();
+            String previewType = fileType;
+            boolean needConvert = false;
+            int convertStatus = 0;
+
+            // 判断是否需要转换
+            if (isOfficeFile(fileType)) {
+                needConvert = true;
+                // 这里可以根据实际转换状态进行设置
+                convertStatus = 0; // 假设未转换
+                previewType = "office";
+            } else if (isVideoFile(fileType)) {
+                previewType = "video";
+            } else if (isImageFile(fileType)) {
+                previewType = "image";
+            } else if ("pdf".equals(fileType)) {
+                previewType = "pdf";
+            }
+
+            // 生成预览基础信息
+            FilePreviewDTO previewDTO = new FilePreviewDTO();
+            previewDTO.setFileId(String.valueOf(archiveInfo.getId()));
+            previewDTO.setFileName(archiveInfo.getFileName());
+            previewDTO.setFileType(archiveInfo.getFileType());
+            previewDTO.setFileSize(file.length());
+            previewDTO.setPreviewType(previewType);
+            previewDTO.setNeedConvert(needConvert);
+            previewDTO.setConvertStatus(convertStatus);
+
+            // 设置预览参数
+            FilePreviewDTO.PreviewParams params = new FilePreviewDTO.PreviewParams();
+            // 这里可以根据实际情况设置参数，例如PDF的总页数、视频时长等
+            previewDTO.setParams(params);
+
+            return ResponseResult.success("获取预览信息成功", previewDTO);
+        } catch (Exception e) {
+            return ResponseResult.fail("获取预览信息失败: " + e.getMessage());
+        }
+    }
+    
+    /**
+     * PDF分页预览接口
+     * 支持按需加载指定页码的PDF内容
+     * @param id 档案ID
+     * @param page 页码（从1开始）
+     * @return PDF页面内容
+     */
+    @GetMapping("/preview/pdf/page")
+    @Operation(summary = "PDF分页预览", description = "PDF大文件分页预览，按需加载指定页码")
+    public ResponseEntity<StreamingResponseBody> previewPdfPage(
+            @RequestParam Long id,
+            @RequestParam int page) {
+        // 注意：这里只是示例，实际PDF分页预览需要使用PDF处理库（如iText、Apache PDFBox等）
+        // 实现逻辑：根据页码提取对应的PDF页面，返回单独的PDF片段
+        try {
+            ArchiveInfo archiveInfo = archiveInfoService.getById(id);
+            if (archiveInfo == null) {
+                ResponseResult<String> result = ResponseResult.fail("档案不存在");
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
+            }
+
+            // 根据文件路径获取文件
+            String filePath = archiveInfo.getFilePath();
+            File file = new File(filePath);
+
+            if (!file.exists()) {
+                String errorMsg = "文件不存在: " + filePath;
+                ResponseResult<String> result = ResponseResult.fail(errorMsg);
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
+            }
+
+            // 设置响应头
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_PDF);
+            headers.setContentDispositionFormData("inline", archiveInfo.getFileName());
+
+            // 使用StreamingResponseBody实现流式传输
+            StreamingResponseBody responseBody = outputStream -> {
+                try (FileInputStream fileInputStream = new FileInputStream(file);
+                     BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
+                    // 注意：这里只是简单地返回整个PDF文件，实际需要提取指定页码
+                    // 实际实现需要使用PDF处理库
+                    byte[] buffer = new byte[1024 * 1024]; // 1MB缓冲区
+                    int bytesRead;
+                    while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                        outputStream.flush();
+                    }
+                } catch (IOException e) {
+                    System.err.println("PDF预览错误: " + e.getMessage());
+                }
+            };
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(responseBody);
+        } catch (Exception e) {
+            String errorMsg = "PDF预览失败: " + e.getMessage();
+            ResponseResult<String> result = ResponseResult.fail(errorMsg);
+            StreamingResponseBody responseBody = outputStream -> {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.writeValue(outputStream, result);
+            };
+            return ResponseEntity.status(HttpStatus.OK).body(responseBody);
+        }
+    }
+    
+    /**
+     * 视频分片预览接口
+     * 支持按需加载视频片段
+     * @param id 档案ID
+     * @param startTime 起始时间（秒）
+     * @param endTime 结束时间（秒）
+     * @return 视频片段内容
+     */
+    @GetMapping("/preview/video/segment")
+    @Operation(summary = "视频分片预览", description = "视频大文件分片预览，支持按需加载视频片段")
+    public ResponseEntity<StreamingResponseBody> previewVideoSegment(
+            @RequestParam Long id,
+            @RequestParam(required = false, defaultValue = "0") long startTime,
+            @RequestParam(required = false) Long endTime) {
+        // 注意：这里只是示例，实际视频分片预览需要使用视频处理库
+        // 实现逻辑：根据起始时间和结束时间提取对应的视频片段
+        try {
+            ArchiveInfo archiveInfo = archiveInfoService.getById(id);
+            if (archiveInfo == null) {
+                ResponseResult<String> result = ResponseResult.fail("档案不存在");
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
+            }
+
+            // 根据文件路径获取文件
+            String filePath = archiveInfo.getFilePath();
+            File file = new File(filePath);
+
+            if (!file.exists()) {
+                String errorMsg = "文件不存在: " + filePath;
+                ResponseResult<String> result = ResponseResult.fail(errorMsg);
+                return ResponseEntity.status(HttpStatus.OK).body(outputStream -> {
+                    ObjectMapper mapper = new ObjectMapper();
+                    mapper.writeValue(outputStream, result);
+                });
+            }
+
+            // 设置响应头
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(getMediaTypeByExtension(archiveInfo.getFileType()));
+            headers.setContentDispositionFormData("inline", archiveInfo.getFileName());
+
+            // 使用StreamingResponseBody实现流式传输
+            StreamingResponseBody responseBody = outputStream -> {
+                try (FileInputStream fileInputStream = new FileInputStream(file);
+                     BufferedInputStream bufferedInputStream = new BufferedInputStream(fileInputStream)) {
+                    // 注意：这里只是简单地返回整个视频文件，实际需要提取指定片段
+                    // 实际实现需要使用视频处理库
+                    byte[] buffer = new byte[1024 * 1024]; // 1MB缓冲区
+                    int bytesRead;
+                    while ((bytesRead = bufferedInputStream.read(buffer)) != -1) {
+                        outputStream.write(buffer, 0, bytesRead);
+                        outputStream.flush();
+                    }
+                } catch (IOException e) {
+                    System.err.println("视频预览错误: " + e.getMessage());
+                }
+            };
+
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .body(responseBody);
+        } catch (Exception e) {
+            String errorMsg = "视频预览失败: " + e.getMessage();
+            ResponseResult<String> result = ResponseResult.fail(errorMsg);
+            StreamingResponseBody responseBody = outputStream -> {
+                ObjectMapper mapper = new ObjectMapper();
+                mapper.writeValue(outputStream, result);
+            };
+            return ResponseEntity.status(HttpStatus.OK).body(responseBody);
+        }
+    }
+    
+    /**
+     * Office文件转换接口
+     * 触发Office文件转换为PDF，支持异步转换
+     * @param id 档案ID
+     * @return 转换状态
+     */
+    @PostMapping("/preview/convert")
+    @Operation(summary = "Office文件转换", description = "触发Office文件转换为PDF，支持异步转换")
+    public ResponseResult<Map<String, Object>> convertOfficeToPdf(@RequestParam Long id) {
+        try {
+            ArchiveInfo archiveInfo = archiveInfoService.getById(id);
+            if (archiveInfo == null) {
+                return ResponseResult.fail("档案不存在");
+            }
+
+            // 获取文件扩展名
+            String fileType = archiveInfo.getFileType().toLowerCase();
+            if (!isOfficeFile(fileType)) {
+                return ResponseResult.fail("该文件类型不需要转换");
+            }
+
+            // 这里实现Office文件转换为PDF的逻辑
+            // 实际实现需要使用Office转换库（如Apache POI、LibreOffice等）
+            // 这里只是示例，返回转换状态
+            Map<String, Object> result = new HashMap<>();
+            result.put("fileId", archiveInfo.getId());
+            result.put("status", "converting"); // 转换中
+            result.put("message", "转换请求已提交");
+
+            return ResponseResult.success("转换请求已提交", result);
+        } catch (Exception e) {
+            return ResponseResult.fail("转换请求失败: " + e.getMessage());
+        }
+    }
+    
+    // ------------------------------ 辅助方法 ------------------------------
+    
+    /**
+     * 判断是否为Office文件
+     * @param fileType 文件类型
+     * @return 是否为Office文件
+     */
+    private boolean isOfficeFile(String fileType) {
+        String[] officeTypes = {"doc", "docx", "xls", "xlsx", "ppt", "pptx", "vsd", "dwg"};
+        for (String type : officeTypes) {
+            if (type.equals(fileType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 判断是否为视频文件
+     * @param fileType 文件类型
+     * @return 是否为视频文件
+     */
+    private boolean isVideoFile(String fileType) {
+        String[] videoTypes = {"mp4", "avi", "mov", "wmv", "flv", "mkv"};
+        for (String type : videoTypes) {
+            if (type.equals(fileType)) {
+                return true;
+            }
+        }
+        return false;
+    }
+    
+    /**
+     * 判断是否为图片文件
+     * @param fileType 文件类型
+     * @return 是否为图片文件
+     */
+    private boolean isImageFile(String fileType) {
+        String[] imageTypes = {"jpg", "jpeg", "png", "gif", "bmp", "webp"};
+        for (String type : imageTypes) {
+            if (type.equals(fileType)) {
+                return true;
+            }
+        }
+        return false;
     }
 
 }

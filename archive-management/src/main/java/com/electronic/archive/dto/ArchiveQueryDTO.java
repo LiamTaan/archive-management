@@ -4,6 +4,7 @@ import com.electronic.archive.util.PageRequest;
 import lombok.Data;
 
 import java.time.LocalDateTime;
+import java.util.List;
 
 /**
  * 档案查询DTO
@@ -50,6 +51,16 @@ public class ArchiveQueryDTO extends PageRequest {
      * 所属部门
      */
     private String department;
+    
+    /**
+     * 所属部门ID
+     */
+    private Long deptId;
+    
+    /**
+     * 所属部门ID列表（用于批量查询）
+     */
+    private List<Long> deptIds;
 
     /**
      * 档案状态（0-未挂接，1-已挂接，2-挂接失败）

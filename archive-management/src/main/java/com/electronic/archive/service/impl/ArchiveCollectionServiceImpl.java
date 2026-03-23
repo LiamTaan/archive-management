@@ -2,10 +2,15 @@ package com.electronic.archive.service.impl;
 
 import com.electronic.archive.constants.ArchiveTypeConstants;
 import com.electronic.archive.dto.CollectionRequestDTO;
-import com.electronic.archive.entity.*;
+import com.electronic.archive.entity.ArchiveInfo;
+import com.electronic.archive.entity.FileMetaDTO;
+import com.electronic.archive.entity.InterfaceConfig;
+import com.electronic.archive.entity.SysUser;
 import com.electronic.archive.service.*;
 import com.electronic.archive.vo.CollectionResultVO;
 import com.electronic.archive.vo.ResponseResult;
+import com.fasterxml.jackson.core.type.TypeReference;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import lombok.extern.slf4j.Slf4j;
 import org.apache.commons.codec.digest.DigestUtils;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,16 +20,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.Authentication;
-import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
+import org.springframework.web.client.HttpStatusCodeException;
 import org.springframework.web.client.RestTemplate;
 import org.springframework.web.multipart.MultipartFile;
-
-import com.fasterxml.jackson.core.type.TypeReference;
-import com.fasterxml.jackson.databind.ObjectMapper;
 
 import java.io.*;
 import java.nio.file.Files;
@@ -567,11 +569,20 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
         archiveInfo.setBusinessType("自动采集");
         archiveInfo.setResponsiblePerson("system");
         archiveInfo.setDepartment(fileMeta.getDepartment());
+        archiveInfo.setDeptId(fileMeta.getDeptId());
         archiveInfo.setHangOnType(0);
         archiveInfo.setStatus(1);
         archiveInfo.setRemark(String.format("从接口采集：%s", config.getInterfaceName()));
         archiveInfo.setCreateTime(LocalDateTime.now());
         archiveInfo.setUpdateTime(LocalDateTime.now());
+        
+        // 获取当前登录用户作为创建人，如果没有则使用系统用户
+        String createBy = "system";
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        if (authentication != null) {
+            createBy = authentication.getName();
+        }
+        archiveInfo.setCreateBy(createBy);
 
         // 保存档案信息
         boolean saveResult = archiveInfoService.save(archiveInfo);
@@ -770,11 +781,13 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setBusinessType(metadataMap.get("businessType") == null ? "" : metadataMap.get("businessType").toString());
                     archiveInfo.setResponsiblePerson(metadataMap.get("responsiblePerson") == null ? responsiblePerson : metadataMap.get("responsiblePerson").toString());
                     archiveInfo.setDepartment(metadataMap.get("department") == null ? "" : metadataMap.get("department").toString());
+                    archiveInfo.setDeptId(requestDTO.getDeptId() != null ? requestDTO.getDeptId() : 0L);
                     archiveInfo.setRemark(metadataMap.get("remark") == null ? "" : metadataMap.get("remark").toString());
                     archiveInfo.setHangOnType(1);
                     archiveInfo.setStatus(0);
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());
+                    archiveInfo.setCreateBy(authentication.getName());
 
                     archiveInfoService.save(archiveInfo);
                     successCount++;
@@ -907,11 +920,13 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setBusinessType(metadataMap.get("businessType") == null ? "" : metadataMap.get("businessType").toString());
                     archiveInfo.setResponsiblePerson(metadataMap.get("responsiblePerson") == null ? responsiblePerson : metadataMap.get("responsiblePerson").toString());
                     archiveInfo.setDepartment(metadataMap.get("department") == null ? "" : metadataMap.get("department").toString());
+                    archiveInfo.setDeptId(requestDTO.getDeptId() != null ? requestDTO.getDeptId() : 0L);
                     archiveInfo.setRemark(metadataMap.get("remark") == null ? "" : metadataMap.get("remark").toString());
                     archiveInfo.setHangOnType(1);
                     archiveInfo.setStatus(0);
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());
+                    archiveInfo.setCreateBy(authentication.getName());
 
                     archiveInfoService.save(archiveInfo);
                     successCount++;
@@ -1032,11 +1047,13 @@ public class ArchiveCollectionServiceImpl implements ArchiveCollectionService {
                     archiveInfo.setBusinessType(metadataMap.get("businessType") == null ? "" : metadataMap.get("businessType").toString());
                     archiveInfo.setResponsiblePerson(metadataMap.get("responsiblePerson") == null ? responsiblePerson : metadataMap.get("responsiblePerson").toString());
                     archiveInfo.setDepartment(metadataMap.get("department") == null ? "" : metadataMap.get("department").toString());
+                    archiveInfo.setDeptId(requestDTO.getDeptId() != null ? requestDTO.getDeptId() : 0L);
                     archiveInfo.setRemark(metadataMap.get("remark") == null ? "" : metadataMap.get("remark").toString());
                     archiveInfo.setHangOnType(1);
                     archiveInfo.setStatus(0);
                     archiveInfo.setCreateTime(LocalDateTime.now());
                     archiveInfo.setUpdateTime(LocalDateTime.now());
+                    archiveInfo.setCreateBy(authentication.getName());
 
                     archiveInfoService.save(archiveInfo);
                     successCount++;

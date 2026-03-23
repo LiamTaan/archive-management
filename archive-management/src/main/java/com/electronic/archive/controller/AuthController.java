@@ -1,19 +1,24 @@
 package com.electronic.archive.controller;
 
+import com.electronic.archive.entity.SysDept;
 import com.electronic.archive.entity.SysUser;
+import com.electronic.archive.service.SysDeptService;
+import com.electronic.archive.service.SysUserRoleService;
 import com.electronic.archive.service.SysUserService;
 import com.electronic.archive.util.JwtUtil;
 import com.electronic.archive.vo.ResponseResult;
-import io.swagger.v3.oas.annotations.tags.Tag;
 import io.swagger.v3.oas.annotations.Operation;
+import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.security.authentication.AuthenticationManager;
+import org.springframework.security.authentication.BadCredentialsException;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.HashMap;
+import java.util.List;
 import java.util.Map;
 
 @Tag(name = "认证管理")
@@ -28,31 +33,85 @@ public class AuthController {
     private SysUserService sysUserService;
 
     @Autowired
+    private SysDeptService sysDeptService;
+
+    @Autowired
+    private SysUserRoleService sysUserRoleService;
+
+    @Autowired
     private JwtUtil jwtUtil;
 
     @Operation(summary = "用户登录")
     @PostMapping("/login")
     public ResponseResult<Map<String, Object>> login(@RequestBody LoginRequest loginRequest) {
-        // 查找用户
-        SysUser user = sysUserService.getByUsername(loginRequest.getUsername());
-        if (user == null) {
-            return ResponseResult.fail("用户名或密码错误");
+        if (loginRequest.getUsername() == null || loginRequest.getUsername().trim().isEmpty() ||
+                loginRequest.getPassword() == null || loginRequest.getPassword().trim().isEmpty()) {
+            return ResponseResult.fail("用户名和密码不能为空");
         }
-        
-        // 生成JWT Token
-        String token = jwtUtil.generateToken(loginRequest.getUsername());
-        
-        Map<String, Object> response = new HashMap<>();
-        response.put("token", token);
-        response.put("user", Map.of(
-                "userId", user.getUserId(),
-                "username", user.getUsername(),
-                "nickname", user.getNickname(),
-                "email", user.getEmail(),
-                "phone", user.getPhone()
-        ));
+        try {
+            // 使用AuthenticationManager进行认证
+            Authentication authentication = authenticationManager.authenticate(
+                    new UsernamePasswordAuthenticationToken(
+                            loginRequest.getUsername().trim(),
+                            loginRequest.getPassword().trim()
+                    )
+            );
+            if (authentication == null || !authentication.isAuthenticated()) {
+                return ResponseResult.fail("用户名或密码错误");
+            }
+            // 将认证信息存入SecurityContext
+            SecurityContextHolder.getContext().setAuthentication(authentication);
+            
+            // 查找用户
+            SysUser user = sysUserService.getByUsername(loginRequest.getUsername());
+            if (user == null) {
+                return ResponseResult.fail("用户名或密码错误");
+            }
 
-        return ResponseResult.success("登录成功", response);
+            // 获取用户角色列表
+            List<String> roleNames = sysUserRoleService.getRoleNamesByUserId(user.getUserId());
+            if (roleNames == null || roleNames.isEmpty()) {
+                roleNames = List.of("SUPER_ADMIN"); // 默认角色
+            }
+
+            // 获取用户部门信息
+            SysDept dept = null;
+            String deptCode = "";
+            String deptTreePath = "";
+            if (user.getDeptId() != null) {
+                dept = sysDeptService.getById(user.getDeptId());
+                if (dept != null) {
+                    deptCode = dept.getDeptCode();
+                    deptTreePath = dept.getTreePath();
+                }
+            }
+
+            // 生成JWT Token
+            String token = jwtUtil.generateToken(loginRequest.getUsername());
+
+            Map<String, Object> response = new HashMap<>();
+            response.put("token", token);
+            response.put("user", Map.of(
+                    "userId", user.getUserId(),
+                    "username", user.getUsername(),
+                    "nickname", user.getNickname(),
+                    "email", user.getEmail(),
+                    "phone", user.getPhone(),
+                    "deptId", user.getDeptId(),
+                    "deptName", dept != null ? dept.getDeptName() : "",
+                    "deptCode", deptCode,
+                    "deptTreePath", deptTreePath,
+                    "roles", roleNames
+            ));
+
+            return ResponseResult.success("登录成功", response);
+        } catch (BadCredentialsException e) {
+            // 登录失败，可能是密码错误或其他认证问题
+            return ResponseResult.fail("用户名或密码错误");
+        } catch (Exception e) {
+            e.printStackTrace(); // 打印异常堆栈信息，便于调试
+            return ResponseResult.fail("登录失败: " + e.getMessage());
+        }
     }
 
     @Operation(summary = "用户注销")

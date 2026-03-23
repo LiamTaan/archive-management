@@ -4,7 +4,7 @@ import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.electronic.archive.entity.ApprovalApply;
 
 /**
- * 审批申请表Mapper
+ * 审批申请Mapper
  */
 public interface ApprovalApplyMapper extends BaseMapper<ApprovalApply> {
 }

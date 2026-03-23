@@ -24,7 +24,7 @@ public class WebMvcConfig implements WebMvcConfigurer {
         // 注册API监控拦截器，拦截所有请求
         registry.addInterceptor(apiMonitoringInterceptor)
                 .addPathPatterns("/**")
-                // 排除Swagger和Actuator端点
-                .excludePathPatterns("/swagger-resources/**", "/webjars/**", "/v3/**", "/swagger-ui/**", "/actuator/**");
+                // 排除Swagger、Actuator和认证接口
+                .excludePathPatterns("/swagger-resources/**", "/webjars/**", "/v3/**", "/swagger-ui/**", "/actuator/**", "/auth/**");
     }
 }

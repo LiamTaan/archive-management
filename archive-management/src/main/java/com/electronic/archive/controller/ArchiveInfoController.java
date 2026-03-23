@@ -4,7 +4,11 @@ import com.electronic.archive.dto.ArchiveQueryDTO;
 import com.electronic.archive.dto.FileChunkDTO;
 import com.electronic.archive.dto.FilePreviewDTO;
 import com.electronic.archive.entity.ArchiveInfo;
+import com.electronic.archive.entity.SysUser;
 import com.electronic.archive.service.ArchiveInfoService;
+import com.electronic.archive.service.SysDeptService;
+import com.electronic.archive.service.SysUserRoleService;
+import com.electronic.archive.service.SysUserService;
 import com.electronic.archive.util.PageResult;
 import com.electronic.archive.vo.ResponseResult;
 import io.swagger.v3.oas.annotations.Operation;
@@ -17,9 +21,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.servlet.mvc.method.annotation.StreamingResponseBody;
 import com.fasterxml.jackson.databind.ObjectMapper;
+
+import java.util.List;
 
 import java.io.*;
 import java.net.URLEncoder;
@@ -38,6 +46,15 @@ public class ArchiveInfoController {
 
     @Autowired
     private ArchiveInfoService archiveInfoService;
+    
+    @Autowired
+    private SysUserService sysUserService;
+    
+    @Autowired
+    private SysUserRoleService sysUserRoleService;
+    
+    @Autowired
+    private SysDeptService sysDeptService;
 
     /**
      * 分页查询档案信息
@@ -68,10 +85,38 @@ public class ArchiveInfoController {
     @Operation(summary = "根据ID查询档案详情", description = "根据档案ID查询档案详情")
     public ResponseResult<ArchiveInfo> getArchiveById(@PathVariable Long id) {
         try {
+            // 获取当前登录用户信息
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            SysUser user = sysUserService.getByUsername(username);
+            
+            // 检查用户是否有权限访问该档案
             ArchiveInfo archiveInfo = archiveInfoService.getById(id);
             if (archiveInfo == null) {
                 return ResponseResult.fail("档案不存在");
             }
+            
+            // 获取用户角色
+            List<String> roleNames = sysUserRoleService.getRoleNamesByUserId(user.getUserId());
+            if (roleNames == null || roleNames.isEmpty()) {
+                roleNames = List.of("USER"); // 默认角色
+            }
+            
+            // 超级管理员可以访问所有档案
+            if (!roleNames.contains("SUPER_ADMIN")) {
+                // 获取用户有权限访问的部门ID列表
+                List<Long> allowedDeptIds = sysDeptService.getDeptAndChildrenIds(user.getDeptId());
+                
+                // 检查档案所属部门是否在用户有权限的部门列表中
+                if (!allowedDeptIds.contains(archiveInfo.getDeptId())) {
+                    // 检查用户是否是该档案的创建者
+                    String creatorField = archiveInfo.getCreateBy();
+                    if (!username.equals(creatorField)) {
+                        return ResponseResult.fail("您没有权限访问该档案");
+                    }
+                }
+            }
+            
             return ResponseResult.success("查询档案详情成功", archiveInfo);
         } catch (Exception e) {
             return ResponseResult.fail("查询档案详情失败: " + e.getMessage());

@@ -100,7 +100,7 @@ public class InterfaceConfig {
     /**
      * 文件存储路径
      */
-    private String storagePath;
+    private String storagePath = "";
 
     /**
      * 创建时间

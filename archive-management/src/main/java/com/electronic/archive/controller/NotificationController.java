@@ -1,11 +1,17 @@
 package com.electronic.archive.controller;
 
+import com.electronic.archive.dto.NotificationQueryDTO;
 import com.electronic.archive.entity.Notification;
+import com.electronic.archive.entity.SysUser;
 import com.electronic.archive.service.NotificationService;
+import com.electronic.archive.service.SysUserService;
+import com.electronic.archive.util.PageResult;
 import com.electronic.archive.vo.ResponseResult;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.security.core.Authentication;
+import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
@@ -19,20 +25,64 @@ import java.util.List;
 public class NotificationController {
     @Autowired
     private NotificationService notificationService;
+    
+    @Autowired
+    private SysUserService sysUserService;
 
     /**
-     * 根据接收人获取通知列表
-     * @param receiverId 接收人ID
-     * @param type 通知类型（可选）
-     * @param status 通知状态（可选）
+     * 分页查询通知列表
+     * @param queryDTO 查询条件
      * @return 通知列表
      */
-    @Operation(summary = "根据接收人获取通知列表")
+    @Operation(summary = "分页查询通知列表")
+    @PostMapping("/list")
+    public ResponseResult<PageResult<Notification>> getNotificationsByReceiver(@RequestBody NotificationQueryDTO queryDTO) {
+        try {
+            // 获取当前登录用户信息
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            SysUser user = sysUserService.getByUsername(username);
+            
+            // 将当前登录用户的ID设置为接收人ID
+            queryDTO.setReceiverId(user.getUserId());
+            
+            var pageResult = notificationService.queryNotificationByPage(queryDTO);
+            
+            // 转换为统一的分页响应格式
+            PageResult<Notification> result = PageResult.fromMpPage(pageResult);
+            
+            return ResponseResult.success("获取通知列表成功", result);
+        } catch (Exception e) {
+            return ResponseResult.fail("获取通知列表失败: " + e.getMessage());
+        }
+    }
+
+    /**
+     * 根据接收人ID获取通知列表（兼容旧接口）
+     * @param queryDTO 查询条件
+     * @return 通知列表
+     */
+    @Operation(summary = "根据接收人ID获取通知列表（兼容旧接口）")
     @GetMapping("/list")
-    public ResponseResult<List<Notification>> getNotificationsByReceiver(
-            @RequestParam(required = false) String receiveBy) {
-        List<Notification> notifications = notificationService.listByReceiveBy(receiveBy);
-        return ResponseResult.success("获取通知列表成功", notifications);
+    public ResponseResult<PageResult<Notification>> getNotificationsByReceiverOld(NotificationQueryDTO queryDTO) {
+        try {
+            // 获取当前登录用户信息
+            Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+            String username = authentication.getName();
+            SysUser user = sysUserService.getByUsername(username);
+            
+            // 将当前登录用户的ID设置为接收人ID
+            queryDTO.setReceiverId(user.getUserId());
+            
+            var pageResult = notificationService.queryNotificationByPage(queryDTO);
+            
+            // 转换为统一的分页响应格式
+            PageResult<Notification> result = PageResult.fromMpPage(pageResult);
+            
+            return ResponseResult.success("获取通知列表成功", result);
+        } catch (Exception e) {
+            return ResponseResult.fail("获取通知列表失败: " + e.getMessage());
+        }
     }
 
     /**
@@ -69,6 +119,18 @@ public class NotificationController {
     public ResponseResult<Void> batchMarkAsRead(@RequestBody List<Long> ids) {
         notificationService.markBatchAsRead(ids);
         return ResponseResult.success("批量标记已读成功");
+    }
+
+    /**
+     * 标记通知为已处理
+     * @param id 通知ID
+     * @return 操作结果
+     */
+    @Operation(summary = "标记通知为已处理")
+    @PutMapping("/{id}/process")
+    public ResponseResult<Void> markAsProcessed(@PathVariable Long id) {
+        notificationService.markAsProcessed(id);
+        return ResponseResult.success("标记已处理成功");
     }
 
     /**

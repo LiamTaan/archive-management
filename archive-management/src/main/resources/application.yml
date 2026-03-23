@@ -37,7 +37,7 @@ spring:
     name: archive-management
   # 允许循环依赖
   main:
-    allow-circular-references: true
+    allow-circular-references: false
   # 数据源配置
   datasource:
     driver-class-name: com.mysql.cj.jdbc.Driver

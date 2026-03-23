@@ -30,9 +30,9 @@ public class CombinationHangOnRequestDTO {
     private List<Long> archiveIds;
 
     /**
-     * 目标系统代码
+     * 目标系统代码列表
      */
-    private String systemCode;
+    private List<String> systemCode;
 
     /**
      * 操作人

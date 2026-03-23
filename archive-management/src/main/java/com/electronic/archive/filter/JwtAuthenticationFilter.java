@@ -1,6 +1,6 @@
 package com.electronic.archive.filter;
 
-import com.electronic.archive.service.SysUserService;
+import com.electronic.archive.config.CustomUserDetailsService;
 import com.electronic.archive.util.JwtUtil;
 import jakarta.servlet.FilterChain;
 import jakarta.servlet.ServletException;
@@ -19,14 +19,24 @@ import java.io.IOException;
 @Component
 public class JwtAuthenticationFilter extends OncePerRequestFilter {
 
-    @Autowired
-    private JwtUtil jwtUtil;
+    private final JwtUtil jwtUtil;
+    private final CustomUserDetailsService customUserDetailsService;
 
-    @Autowired
-    private SysUserService sysUserService;
+    public JwtAuthenticationFilter(JwtUtil jwtUtil, CustomUserDetailsService customUserDetailsService) {
+        this.jwtUtil = jwtUtil;
+        this.customUserDetailsService = customUserDetailsService;
+    }
 
     @Override
     protected void doFilterInternal(HttpServletRequest request, HttpServletResponse response, FilterChain filterChain) throws ServletException, IOException {
+        // 1. 获取请求路径，跳过登录接口（双重保障）
+        String requestURI = request.getRequestURI();
+        if ("/archive/auth/login".equals(requestURI)) {
+            filterChain.doFilter(request, response);
+            return; // 直接放行，不执行后续逻辑
+        }
+
+
         // 从请求头中获取Token
         String authorizationHeader = request.getHeader("Authorization");
 
@@ -44,7 +54,7 @@ public class JwtAuthenticationFilter extends OncePerRequestFilter {
             // 验证Token
             if (jwtUtil.validateToken(token)) {
                 // 加载用户信息
-                UserDetails userDetails = sysUserService.loadUserByUsername(username);
+                UserDetails userDetails = customUserDetailsService.loadUserByUsername(username);
                 // 创建认证Token
                 UsernamePasswordAuthenticationToken authenticationToken = new UsernamePasswordAuthenticationToken(
                         userDetails, null, userDetails.getAuthorities());

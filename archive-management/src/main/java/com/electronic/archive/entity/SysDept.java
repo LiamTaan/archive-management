@@ -5,57 +5,47 @@ import com.baomidou.mybatisplus.annotation.TableField;
 import com.baomidou.mybatisplus.annotation.TableId;
 import com.baomidou.mybatisplus.annotation.TableName;
 import lombok.Data;
+import lombok.ToString;
 
 import java.time.LocalDateTime;
 import java.util.List;
 
 /**
- * 系统菜单实体类
+ * 系统部门实体类
  */
 @Data
-@TableName("sys_menu")
-public class SysMenu {
+@ToString(exclude = "children")
+@TableName("sys_dept")
+public class SysDept {
     /**
-     * 菜单ID
+     * 部门ID
      */
-    @TableId(value = "menu_id", type = IdType.AUTO)
-    private Long menuId;
+    @TableId(value = "dept_id", type = IdType.AUTO)
+    private Long deptId;
 
     /**
-     * 父菜单ID
+     * 父部门ID
      */
     @TableField("parent_id")
     private Long parentId;
 
     /**
-     * 菜单名称
+     * 部门名称
      */
-    @TableField("menu_name")
-    private String menuName;
+    @TableField("dept_name")
+    private String deptName;
 
     /**
-     * 菜单路径
+     * 部门编码
      */
-    @TableField("path")
-    private String path;
+    @TableField("dept_code")
+    private String deptCode;
 
     /**
-     * 组件路径
+     * 部门描述
      */
-    @TableField("component")
-    private String component;
-
-    /**
-     * 菜单类型（0-目录，1-菜单，2-按钮）
-     */
-    @TableField("menu_type")
-    private Integer menuType;
-
-    /**
-     * 菜单图标
-     */
-    @TableField("icon")
-    private String icon;
+    @TableField("dept_desc")
+    private String deptDesc;
 
     /**
      * 排序
@@ -70,6 +60,12 @@ public class SysMenu {
     private Integer status;
 
     /**
+     * 树路径，用于快速查询上级部门，格式如：/1/2/3/
+     */
+    @TableField("tree_path")
+    private String treePath;
+
+    /**
      * 创建时间
      */
     @TableField("create_time")
@@ -80,10 +76,10 @@ public class SysMenu {
      */
     @TableField("update_time")
     private LocalDateTime updateTime;
-
+    
     /**
-     * 子菜单列表（非数据库字段）
+     * 子部门列表（非数据库字段，用于构建树结构）
      */
     @TableField(exist = false)
-    private List<SysMenu> children;
+    private List<SysDept> children;
 }

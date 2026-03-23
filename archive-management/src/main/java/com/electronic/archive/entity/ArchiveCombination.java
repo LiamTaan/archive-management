@@ -40,6 +40,12 @@ public class ArchiveCombination {
     private String createBy;
 
     /**
+     * 所属部门ID
+     */
+    @TableField("dept_id")
+    private Long deptId;
+
+    /**
      * 创建时间
      */
     private LocalDateTime createTime;

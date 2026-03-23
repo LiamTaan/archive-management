@@ -1,10 +1,10 @@
 package com.electronic.archive.controller;
 
-import com.electronic.archive.entity.ApprovalApply;
+
 import com.electronic.archive.entity.CollectionLog;
 import com.electronic.archive.entity.HangOnLog;
 import com.electronic.archive.entity.SystemLog;
-import com.electronic.archive.service.ApprovalApplyService;
+
 import com.electronic.archive.service.ArchiveInfoService;
 import com.electronic.archive.service.CollectionLogService;
 import com.electronic.archive.service.HangOnLogService;
@@ -40,8 +40,7 @@ public class HomeController {
     @Autowired
     private SysUserService sysUserService;
     
-    @Autowired
-    private ApprovalApplyService approvalApplyService;
+
     
     @Autowired
     private SystemLogService systemLogService;
@@ -70,9 +69,8 @@ public class HomeController {
         long userCount = sysUserService.count();
         stats.put("userCount", userCount);
         
-        // 获取待处理审批数
-        long pendingApprovals = approvalApplyService.getPendingApprovalsCount();
-        stats.put("pendingApprovals", pendingApprovals);
+        // 审批功能已移除，不再显示待处理审批数
+        stats.put("pendingApprovals", 0L);
         
         return ResponseResult.success("获取统计数据成功", stats);
     }
@@ -154,41 +152,7 @@ public class HomeController {
     @Operation(summary = "获取待办事项列表")
     @GetMapping("/todos")
     public ResponseResult<List<Map<String, Object>>> getTodos() {
-        List<Map<String, Object>> todos = new ArrayList<>();
-        
-        // 获取当前用户的待审批列表（简化实现，固定用户ID为1）
-        Long userId = 1L;
-        List<ApprovalApply> pendingApprovals = approvalApplyService.getMyPendingApprovals(userId);
-        
-        // 将待审批列表转换为前端需要的格式
-        for (ApprovalApply approval : pendingApprovals) {
-            Map<String, Object> todo = new HashMap<>();
-            
-            // 根据操作类型生成标题和描述
-            String title;
-            String desc;
-            if (approval.getOperationType() == 1) {
-                title = "档案修改挂接审批";
-                desc = String.format("申请人：%s，需处理档案修改挂接审批", approval.getApplicantName());
-            } else if (approval.getOperationType() == 2) {
-                title = "档案解除挂接审批";
-                desc = String.format("申请人：%s，需处理档案解除挂接审批", approval.getApplicantName());
-            } else {
-                title = "档案审批";
-                desc = String.format("申请人：%s，需处理档案审批", approval.getApplicantName());
-            }
-            
-            todo.put("title", title);
-            todo.put("desc", desc);
-            todo.put("badge", "待审批");
-            todo.put("type", "warning");
-            todo.put("actionText", "处理审批");
-            todo.put("route", "/approval/my/pending");
-            todo.put("disabled", false);
-            
-            todos.add(todo);
-        }
-        
-        return ResponseResult.success("获取待办事项成功", todos);
+        // 审批功能已移除，返回空列表
+        return ResponseResult.success("获取待办事项成功", new ArrayList<>());
     }
 }

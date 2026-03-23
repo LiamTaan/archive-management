@@ -7,6 +7,18 @@
         SELECT permission_id FROM sys_role_permission WHERE role_id = #{roleId}
     </select>
     
+    <!-- 根据角色编码列表获取权限ID列表 -->
+    <select id="getPermissionIdsByRoleNames" parameterType="java.util.List" resultType="java.lang.Long">
+        SELECT DISTINCT rp.permission_id 
+        FROM sys_role_permission rp 
+        JOIN sys_role r ON rp.role_id = r.role_id 
+        WHERE r.role_code IN 
+        <foreach collection="list" item="roleCode" open="(" close=")" separator=",">
+            #{roleCode}
+        </foreach>
+        AND r.status = 1
+    </select>
+    
     <!-- 根据角色ID删除所有关联的权限 -->
     <delete id="deleteByRoleId" parameterType="java.lang.Long">
         DELETE FROM sys_role_permission WHERE role_id = #{roleId}

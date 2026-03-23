@@ -193,13 +193,19 @@ public class HookValidationServiceImpl implements HookValidationService {
         // 允许的文件类型列表
         List<String> allowedTypes = List.of("pdf", "pptx" ,"doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png", "tif", "tiff");
         
+        // 处理带点号的fileType（如".pdf"转换为"pdf"）
+        String normalizedFileType = fileType;
+        if (normalizedFileType != null && normalizedFileType.startsWith(".")) {
+            normalizedFileType = normalizedFileType.substring(1);
+        }
+        
         // 检查文件类型是否在允许列表中
-        if (fileType == null || !allowedTypes.contains(fileType.toLowerCase())) {
+        if (normalizedFileType == null || !allowedTypes.contains(normalizedFileType.toLowerCase())) {
             return false;
         }
         
         // 检查文件路径是否以正确的扩展名结尾
-        if (filePath == null || !filePath.toLowerCase().endsWith("." + fileType.toLowerCase())) {
+        if (filePath == null || !filePath.toLowerCase().endsWith("." + normalizedFileType.toLowerCase())) {
             return false;
         }
         
@@ -214,7 +220,8 @@ public class HookValidationServiceImpl implements HookValidationService {
         
         try {
             String actualMd5 = calculateFileMd5(filePath);
-            return expectedMd5.equalsIgnoreCase(actualMd5);
+            // 移除预期MD5值的前后空格，并进行大小写不敏感比较
+            return expectedMd5.trim().equalsIgnoreCase(actualMd5);
         } catch (Exception e) {
             return false;
         }
@@ -227,16 +234,12 @@ public class HookValidationServiceImpl implements HookValidationService {
             return false;
         }
         
-        // 检查必填字段
-        if (requestDTO.getBusinessNo() == null || requestDTO.getBusinessNo().isEmpty()) {
+        // 检查必填字段（与档案采集时的逻辑保持一致）
+        if (requestDTO.getBusinessNo() == null) {
             return false;
         }
         
-        if (requestDTO.getResponsiblePerson() == null || requestDTO.getResponsiblePerson().isEmpty()) {
-            return false;
-        }
-        
-        if (requestDTO.getDepartment() == null || requestDTO.getDepartment().isEmpty()) {
+        if (requestDTO.getResponsiblePerson() == null) {
             return false;
         }
         
@@ -331,6 +334,12 @@ public class HookValidationServiceImpl implements HookValidationService {
             return false;
         }
         
+        // 处理带点号的fileType（如".pdf"转换为"pdf"）
+        String normalizedFileType = fileType;
+        if (normalizedFileType != null && normalizedFileType.startsWith(".")) {
+            normalizedFileType = normalizedFileType.substring(1);
+        }
+        
         // 定义档案分类与允许的文件类型映射
         // 示例映射，实际项目中可以根据业务规则扩展
         Map<String, List<String>> categoryFileTypeMap = new HashMap<>();
@@ -339,14 +348,14 @@ public class HookValidationServiceImpl implements HookValidationService {
         categoryFileTypeMap.put("图片", List.of("jpg", "jpeg", "png", "tif", "tiff"));
         categoryFileTypeMap.put("其他", List.of("pdf", "doc", "docx", "xls", "xlsx", "jpg", "jpeg", "png", "tif", "tiff"));
         
-        // 检查档案分类是否在映射中
+        // 检查档案分类是否在映射中，如果不在，默认允许所有类型
         if (!categoryFileTypeMap.containsKey(archiveType)) {
-            return false;
+            return true;
         }
         
         // 检查文件类型是否在允许列表中
         List<String> allowedTypes = categoryFileTypeMap.get(archiveType);
-        return allowedTypes.contains(fileType.toLowerCase());
+        return allowedTypes.contains(normalizedFileType.toLowerCase());
     }
 
     /**
@@ -366,6 +375,11 @@ public class HookValidationServiceImpl implements HookValidationService {
         String lowerArchiveType = archiveType.toLowerCase();
         
         // 检查文件是否存储在对应分类目录下
+        // 如果是手动采集的文件，允许存储在其他位置
+        if (lowerFilePath.contains("manual") || lowerFilePath.contains("batch") || lowerFilePath.contains("external")) {
+            return true;
+        }
+        
         return lowerFilePath.contains(lowerArchiveType);
     }
 

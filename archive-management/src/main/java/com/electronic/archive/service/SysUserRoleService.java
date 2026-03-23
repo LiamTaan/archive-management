@@ -30,4 +30,18 @@ public interface SysUserRoleService extends IService<SysUserRole> {
      * @return 角色名称列表
      */
     List<String> getRoleNamesByUserId(Long userId);
+
+    /**
+     * 获取用户的角色编码列表
+     * @param userId 用户ID
+     * @return 角色编码列表
+     */
+    List<String> getRoleCodesByUserId(Long userId);
+    
+    /**
+     * 根据角色编码获取用户列表
+     * @param roleCode 角色编码
+     * @return 用户列表
+     */
+    List<String> getUsersByRoleCode(String roleCode);
 }

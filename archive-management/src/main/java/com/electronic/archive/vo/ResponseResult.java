@@ -53,6 +53,16 @@ public class ResponseResult<T> {
     }
 
     /**
+     * 成功响应（带数据，不带消息）
+     * @param data 响应数据
+     * @param <T> 响应数据类型
+     * @return 响应结果
+     */
+    public static <T> ResponseResult<T> success(T data) {
+        return new ResponseResult<>(200, null, data);
+    }
+
+    /**
      * 成功响应（不带数据）
      * @param message 响应消息
      * @param <T> 响应数据类型
@@ -60,6 +70,15 @@ public class ResponseResult<T> {
      */
     public static <T> ResponseResult<T> success(String message) {
         return new ResponseResult<>(200, message, null);
+    }
+
+    /**
+     * 成功响应（不带数据，不带消息）
+     * @param <T> 响应数据类型
+     * @return 响应结果
+     */
+    public static <T> ResponseResult<T> success() {
+        return new ResponseResult<>(200, null, null);
     }
 
     /**

@@ -1,6 +1,7 @@
 package com.electronic.archive.service.impl;
 
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.electronic.archive.annotation.DataPermission;
 import com.electronic.archive.entity.ArchiveCombinationRelation;
 import com.electronic.archive.mapper.ArchiveCombinationRelationMapper;
 import com.electronic.archive.service.ArchiveCombinationRelationService;
@@ -70,6 +71,7 @@ public class ArchiveCombinationRelationServiceImpl extends ServiceImpl<ArchiveCo
     }
 
     @Override
+    @DataPermission(department = "current_and_children")
     public List<ArchiveCombinationRelation> listByCombinationId(Long combinationId) {
         try {
             List<ArchiveCombinationRelation> relations = baseMapper.selectByCombinationId(combinationId);
@@ -82,6 +84,7 @@ public class ArchiveCombinationRelationServiceImpl extends ServiceImpl<ArchiveCo
     }
 
     @Override
+    @DataPermission(department = "current_and_children")
     public List<ArchiveCombinationRelation> listByArchiveId(Long archiveId) {
         try {
             List<ArchiveCombinationRelation> relations = baseMapper.selectByArchiveId(archiveId);

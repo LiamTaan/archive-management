@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.metadata.IPage;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.electronic.archive.annotation.DataPermission;
 import com.electronic.archive.dto.ArchiveCombinationQueryDTO;
 import com.electronic.archive.entity.ArchiveCombination;
 import com.electronic.archive.mapper.ArchiveCombinationMapper;
@@ -19,6 +20,7 @@ import org.springframework.stereotype.Service;
 public class ArchiveCombinationServiceImpl extends ServiceImpl<ArchiveCombinationMapper, ArchiveCombination> implements ArchiveCombinationService {
 
     @Override
+    @DataPermission(department = "current_and_children")
     public IPage<ArchiveCombination> queryArchiveCombinationByPage(ArchiveCombinationQueryDTO queryDTO) {
         // 创建分页对象
         Page<ArchiveCombination> page = new Page<>(queryDTO.getPageNum(), queryDTO.getPageSize());
@@ -39,6 +41,16 @@ public class ArchiveCombinationServiceImpl extends ServiceImpl<ArchiveCombinatio
         // 组合类型精确查询
         if (queryDTO.getCombinationType() != null && !queryDTO.getCombinationType().isEmpty()) {
             queryWrapper.eq(ArchiveCombination::getCombinationType, queryDTO.getCombinationType());
+        }
+        
+        // 所属部门ID查询
+        if (queryDTO.getDeptId() != null) {
+            queryWrapper.eq(ArchiveCombination::getDeptId, queryDTO.getDeptId());
+        }
+        
+        // 所属部门ID列表查询
+        if (queryDTO.getDeptIds() != null && !queryDTO.getDeptIds().isEmpty()) {
+            queryWrapper.in(ArchiveCombination::getDeptId, queryDTO.getDeptIds());
         }
         
         // 按创建时间倒序排序

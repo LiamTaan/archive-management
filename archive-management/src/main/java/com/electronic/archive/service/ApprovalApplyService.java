@@ -1,59 +1,59 @@
 package com.electronic.archive.service;
 
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.IService;
 import com.electronic.archive.entity.ApprovalApply;
 
-import java.util.List;
-
 /**
- * 审批申请服务接口
+ * 审批申请Service
  */
 public interface ApprovalApplyService extends IService<ApprovalApply> {
-    /**
-     * 获取待审批列表
-     * @return 待审批列表
-     */
-    List<ApprovalApply> getPendingApprovals();
-
-    /**
-     * 获取已审批列表
-     * @return 已审批列表
-     */
-    List<ApprovalApply> getApprovedApprovals();
-
-    /**
-     * 获取当前用户的待办审批列表
-     * @param userId 当前用户ID
-     * @return 待办审批列表
-     */
-    List<ApprovalApply> getMyPendingApprovals(Long userId);
-
-    /**
-     * 获取当前用户的已办审批列表
-     * @param userId 当前用户ID
-     * @return 已办审批列表
-     */
-    List<ApprovalApply> getMyApprovedApprovals(Long userId);
     
     /**
-     * 获取待审批数量
-     * @return 待审批数量
+     * 分页查询审批申请列表（带数据权限）
+     * @param page 页码
+     * @param size 每页大小
+     * @param queryWrapper 查询条件
+     * @return 审批申请列表
      */
-    long getPendingApprovalsCount();
-
+    Page<ApprovalApply> pageWithPermission(int page, int size, LambdaQueryWrapper<ApprovalApply> queryWrapper);
+    
     /**
-     * 提交审批申请
-     * @param approvalApply 审批申请信息
+     * 提交挂接申请
+     * @param archiveId 档案ID
+     * @param applyBy 申请人
+     * @return 申请ID
      */
-    void submitApproval(ApprovalApply approvalApply);
-
+    Long submitApply(Long archiveId, String applyBy);
+    
     /**
-     * 提交审批结果
-     * @param approvalId 审批ID
-     * @param result 审批结果
-     * @param comment 审批意见
-     * @param approverId 审批人ID
-     * @param approverName 审批人名称
+     * 部门审核
+     * @param applyId 申请ID
+     * @param operatorId 操作人ID
+     * @param operatorName 操作人名称
+     * @param pass 是否通过
+     * @param opinion 审核意见
+     * @return 是否成功
      */
-    void submitApprovalResult(Long approvalId, String result, String comment, Long approverId, String approverName);
+    boolean deptAudit(Long applyId, Long operatorId, String operatorName, boolean pass, String opinion);
+    
+    /**
+     * 档案复核
+     * @param applyId 申请ID
+     * @param operatorId 操作人ID
+     * @param operatorName 操作人名称
+     * @param pass 是否通过
+     * @param opinion 复核意见
+     * @return 是否成功
+     */
+    boolean archiveAudit(Long applyId, Long operatorId, String operatorName, boolean pass, String opinion);
+    
+    /**
+     * 最终入库
+     * @param applyId 申请ID
+     * @param operatorName 操作人名称
+     * @return 是否成功
+     */
+    boolean finalArchive(Long applyId, String operatorName);
 }

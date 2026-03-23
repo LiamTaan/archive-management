@@ -25,6 +25,11 @@ public class SysRolePermissionServiceImpl extends ServiceImpl<SysRolePermissionM
         return sysRolePermissionMapper.getPermissionIdsByRoleId(roleId);
     }
 
+    @Override
+    public List<Long> getPermissionIdsByRoleNames(List<String> roleNames) {
+        return sysRolePermissionMapper.getPermissionIdsByRoleNames(roleNames);
+    }
+
     @Transactional(rollbackFor = Exception.class)
     @Override
     public boolean saveRolePermissions(Long roleId, List<Long> permissionIds) {

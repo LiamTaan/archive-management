@@ -28,6 +28,11 @@ public class CollectionRequestDTO {
      * 所属部门
      */
     private String department;
+    
+    /**
+     * 部门ID
+     */
+    private Long deptId;
 
     /**
      * 档案路径列表

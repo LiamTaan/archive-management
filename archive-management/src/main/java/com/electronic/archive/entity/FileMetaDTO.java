@@ -63,4 +63,9 @@ public class FileMetaDTO {
      * 所属部门
      */
     private String department;
+
+    /**
+     * 部门ID
+     */
+    private Long deptId;
 }

@@ -81,6 +81,12 @@ public class ArchiveInfo {
     private String department;
 
     /**
+     * 所属部门ID
+     */
+    @TableField("dept_id")
+    private Long deptId;
+
+    /**
      * 挂接时间
      */
     @TableField("hang_on_time")
@@ -96,6 +102,12 @@ public class ArchiveInfo {
      * 档案状态(0-未挂接，1-已挂接，2-挂接失败)
      */
     private Integer status;
+    
+    /**
+     * 审批状态（0-待审批，1-部门审核通过，2-档案复核通过，3-已入库，4-驳回）
+     */
+    @TableField("approval_status")
+    private Integer approvalStatus;
 
     /**
      * 备注
@@ -113,4 +125,10 @@ public class ArchiveInfo {
      */
     @TableField("update_time")
     private LocalDateTime updateTime;
+    
+    /**
+     * 创建人
+     */
+    @TableField("create_by")
+    private String createBy;
 }

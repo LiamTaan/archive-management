@@ -3,6 +3,8 @@ package com.electronic.archive.dto;
 import com.electronic.archive.util.PageRequest;
 import lombok.Data;
 
+import java.util.List;
+
 /**
  * 档案组合查询DTO
  * 用于接收档案组合查询请求参数
@@ -23,4 +25,14 @@ public class ArchiveCombinationQueryDTO extends PageRequest {
      * 组合类型
      */
     private String combinationType;
+    
+    /**
+     * 所属部门ID
+     */
+    private Long deptId;
+    
+    /**
+     * 所属部门ID列表（用于批量查询）
+     */
+    private List<Long> deptIds;
 }

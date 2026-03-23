@@ -15,10 +15,16 @@ import java.time.LocalDateTime;
 @TableName("notification")
 public class Notification {
     /**
-     * 通知ID，主键，自增
+     * 通知ID
      */
     @TableId(value = "notification_id", type = IdType.AUTO)
     private Long id;
+
+    /**
+     * 通知类型(0-系统 通知，1-挂接失败提醒, 2-挂接完成提醒, 3-审批提醒，4-解除挂接通知)
+     */
+    @TableField("notification_type")
+    private Integer type;
 
     /**
      * 通知标题
@@ -31,40 +37,66 @@ public class Notification {
     private String content;
 
     /**
-     * 通知类型(0-系统通知，1-挂接通知，2-审批通知)
+     * 关联的档案ID
      */
-    private Integer type;
+    @TableField("archive_id")
+    private Long archiveId;
 
     /**
-     * 接收人
+     * 关联的操作ID
      */
-    @TableField("receiver")
-    private String receiveBy;
+    @TableField("operation_id")
+    private Long operationId;
 
     /**
-     * 发送人
+     * 接收人ID
      */
-    @TableField("sender")
-    private String sendBy;
+    @TableField("receiver_id")
+    private Long receiverId;
 
     /**
-     * 通知状态(0-未读，1-已读)
+     * 接收人名称
+     */
+    @TableField("receiver_name")
+    private String receiverName;
+
+    /**
+     * 发送人ID
+     */
+    @TableField("sender_id")
+    private Long senderId;
+
+    /**
+     * 发送人名称
+     */
+    @TableField("sender_name")
+    private String senderName;
+
+    /**
+     * 通知状态(0-未读, 1-已读, 2-已处理)
      */
     private Integer status;
 
     /**
-     * 创建时间
+     * 发送时间
      */
-    @TableField("create_time")
-    private LocalDateTime createTime;
+    @TableField("send_time")
+    private LocalDateTime sendTime;
 
     /**
-     * 关联业务ID
+     * 读取时间
      */
-    private Long businessId;
+    @TableField("read_time")
+    private LocalDateTime readTime;
 
     /**
-     * 关联业务类型
+     * 处理时间
      */
-    private String businessType;
+    @TableField("process_time")
+    private LocalDateTime processTime;
+
+    /**
+     * 备注
+     */
+    private String remark;
 }

@@ -31,7 +31,7 @@ public class SysPermission {
     private String permissionCode;
 
     /**
-     * 权限类型(menu/button/api)
+     * 权限类型(directory/menu/button/api)
      */
     @TableField("permission_type")
     private String permissionType;

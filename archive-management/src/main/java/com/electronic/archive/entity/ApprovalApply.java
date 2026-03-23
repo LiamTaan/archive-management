@@ -1,10 +1,7 @@
 package com.electronic.archive.entity;
 
-import com.baomidou.mybatisplus.annotation.IdType;
-import com.baomidou.mybatisplus.annotation.TableId;
-import com.baomidou.mybatisplus.annotation.TableName;
+import com.baomidou.mybatisplus.annotation.*;
 import lombok.Data;
-
 import java.time.LocalDateTime;
 
 /**
@@ -13,21 +10,37 @@ import java.time.LocalDateTime;
 @Data
 @TableName("approval_apply")
 public class ApprovalApply {
+    
     /**
-     * 申请表ID
+     * 申请ID
      */
     @TableId(type = IdType.AUTO)
     private Long applyId;
     
     /**
-     * 申请人ID
+     * 档案ID
      */
-    private Long applicantId;
+    private Long archiveId;
     
     /**
-     * 申请人名称
+     * 所属部门ID
      */
-    private String applicantName;
+    private Long deptId;
+    
+    /**
+     * 创建人
+     */
+    private String createBy;
+    
+    /**
+     * 申请类型（1-挂接申请）
+     */
+    private Integer applyType;
+    
+    /**
+     * 申请状态（0-待审批，1-部门审核通过，2-档案复核通过，3-已入库，4-驳回）
+     */
+    private Integer applyStatus;
     
     /**
      * 申请时间
@@ -35,37 +48,59 @@ public class ApprovalApply {
     private LocalDateTime applyTime;
     
     /**
-     * 操作类型(1-修改挂接，2-解除挂接)
+     * 申请人
      */
-    private Integer operationType;
+    private String applyBy;
     
     /**
-     * 操作对象ID(档案ID)
+     * 部门负责人ID
      */
-    private Long objectId;
+    private Long deptLeaderId;
     
     /**
-     * 操作内容(JSON格式)
+     * 部门审核时间
      */
-    private String operationContent;
+    private LocalDateTime deptAuditTime;
     
     /**
-     * 审批状态(1-待审批，2-已通过，3-已拒绝)
+     * 部门审核意见
      */
-    private Integer status;
+    private String deptAuditOpinion;
     
     /**
-     * 备注
+     * 档案管理员ID
      */
-    private String remark;
+    private Long archiveAdminId;
+    
+    /**
+     * 档案复核时间
+     */
+    private LocalDateTime archiveAuditTime;
+    
+    /**
+     * 档案复核意见
+     */
+    private String archiveAuditOpinion;
+    
+    /**
+     * 最终确认时间
+     */
+    private LocalDateTime finalConfirmTime;
+    
+    /**
+     * 最终确认人
+     */
+    private String finalConfirmBy;
     
     /**
      * 创建时间
      */
+    @TableField(fill = FieldFill.INSERT)
     private LocalDateTime createTime;
     
     /**
      * 更新时间
      */
+    @TableField(fill = FieldFill.INSERT_UPDATE)
     private LocalDateTime updateTime;
 }

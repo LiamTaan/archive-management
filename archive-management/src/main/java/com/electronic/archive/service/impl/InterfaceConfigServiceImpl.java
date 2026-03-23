@@ -6,6 +6,8 @@ import com.electronic.archive.mapper.InterfaceConfigMapper;
 import com.electronic.archive.service.InterfaceConfigService;
 import org.springframework.stereotype.Service;
 
+import java.util.List;
+
 /**
  * 接口配置服务实现类
  */
@@ -26,5 +28,13 @@ public class InterfaceConfigServiceImpl extends ServiceImpl<InterfaceConfigMappe
         return this.lambdaQuery()
                 .eq(InterfaceConfig::getInterfaceCode, systemCode)
                 .one();
+    }
+
+    @Override
+    public List<InterfaceConfig> getEnabledInterfaces() {
+        // 查询所有启用的接口配置（status=1）
+        return this.lambdaQuery()
+                .eq(InterfaceConfig::getStatus, 1)
+                .list();
     }
 }

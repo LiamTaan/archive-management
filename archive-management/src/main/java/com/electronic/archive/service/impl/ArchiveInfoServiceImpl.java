@@ -3,6 +3,7 @@ package com.electronic.archive.service.impl;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.baomidou.mybatisplus.extension.service.impl.ServiceImpl;
+import com.electronic.archive.annotation.DataPermission;
 import com.electronic.archive.dto.ArchiveQueryDTO;
 import com.electronic.archive.entity.ArchiveInfo;
 import com.electronic.archive.mapper.ArchiveInfoMapper;
@@ -16,6 +17,7 @@ import org.springframework.stereotype.Service;
 public class ArchiveInfoServiceImpl extends ServiceImpl<ArchiveInfoMapper, ArchiveInfo> implements ArchiveInfoService {
 
     @Override
+    @DataPermission(department = "current_and_children")
     public Page<ArchiveInfo> queryArchiveByPage(ArchiveQueryDTO queryDTO) {
         // 创建分页对象
         Page<ArchiveInfo> page = queryDTO.toMpPage();
@@ -63,6 +65,16 @@ public class ArchiveInfoServiceImpl extends ServiceImpl<ArchiveInfoMapper, Archi
         // 所属部门查询
         if (queryDTO.getDepartment() != null && !queryDTO.getDepartment().isEmpty()) {
             queryWrapper.eq(ArchiveInfo::getDepartment, queryDTO.getDepartment());
+        }
+        
+        // 所属部门ID查询
+        if (queryDTO.getDeptId() != null) {
+            queryWrapper.eq(ArchiveInfo::getDeptId, queryDTO.getDeptId());
+        }
+        
+        // 所属部门ID列表查询
+        if (queryDTO.getDeptIds() != null && !queryDTO.getDeptIds().isEmpty()) {
+            queryWrapper.in(ArchiveInfo::getDeptId, queryDTO.getDeptIds());
         }
         
         // 档案状态查询

@@ -1,9 +1,12 @@
 package com.electronic.archive.service.impl;
 
+import com.electronic.archive.annotation.DataPermission;
 import com.electronic.archive.dto.CombinationHangOnRequestDTO;
 import com.electronic.archive.dto.HangOnRequestDTO;
 import com.electronic.archive.dto.HookValidationRequestDTO;
+import com.electronic.archive.constants.RoleConstants;
 import com.electronic.archive.entity.*;
+import com.electronic.archive.service.ArchiveSystemRelationService;
 import com.electronic.archive.mapper.HangOnLogMapper;
 import com.electronic.archive.service.*;
 import com.electronic.archive.vo.HookValidationResultVO;
@@ -53,6 +56,21 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
 
     @Autowired
     private SysUserService sysUserService;
+    
+    @Autowired
+    private SysDeptService sysDeptService;
+    
+    @Autowired
+    private SysUserRoleService sysUserRoleService;
+    
+    @Autowired
+    private SysRoleService sysRoleService;
+    
+    @Autowired
+    private ApprovalApplyService approvalApplyService;
+
+    @Autowired
+    private ArchiveSystemRelationService archiveSystemRelationService;
 
     /**
      * 检查档案是否已经挂接了指定系统
@@ -84,12 +102,14 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             // 获取当前登录用户的昵称作为责任人
             String responsiblePerson = "admin";
             Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-            if (authentication != null) {
-                String username = authentication.getName();
-                SysUser user = sysUserService.getByUsername(username);
-                if (user != null) {
-                    responsiblePerson = user.getNickname() != null ? user.getNickname() : user.getUsername();
-                }
+            if (authentication == null) {
+                log.error("自动挂接失败，未找到当前登录用户");
+                return false;
+            }
+            String username = authentication.getName();
+            SysUser currentUser = sysUserService.getByUsername(username);
+            if (currentUser != null) {
+                responsiblePerson = currentUser.getNickname() != null ? currentUser.getNickname() : currentUser.getUsername();
             }
             // 1. 检查档案是否存在
             ArchiveInfo archiveInfo = archiveInfoService.getById(archiveId);
@@ -97,7 +117,7 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                 log.error("自动挂接失败，档案ID：{}，档案不存在", archiveId);
                 return false;
             }
-            
+
             // 2. 检查是否已挂接相同系统
             if (isArchiveHangedOnSystem(archiveId, systemCode)) {
                 log.error("自动挂接失败，档案ID：{}，已挂接该系统", archiveId);
@@ -115,22 +135,22 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             validationRequest.setFileType(archiveInfo.getFileType());
             validationRequest.setMd5Value(archiveInfo.getMd5Value());
             validationRequest.setOperateBy(responsiblePerson);
-            
+
             HookValidationResultVO validationResult = hookValidationService.validateSingleHook(validationRequest);
             if (!validationResult.isValid()) {
                 log.error("自动挂接失败，档案ID：{}，校验失败：{}", archiveId, validationResult.getSuggestion());
-                
+
                 // 更新档案状态为挂接失败
                 archiveInfo.setStatus(2); // 挂接失败
                 archiveInfo.setUpdateTime(LocalDateTime.now());
                 archiveInfoService.updateById(archiveInfo);
-                
+
                 // 记录挂接日志（0-挂接，1-修改，2-解除）
-                HangOnLog hangOnLog = createHangOnLog(archiveId, 0, 2, "system", "auto", "target-system", 
-                                              "自动挂接失败", 
+                HangOnLog hangOnLog = createHangOnLog(archiveId, 0, 2, "system", "auto", "target-system",
+                                              "自动挂接失败",
                                               "校验失败：" + validationResult.getSuggestion());
                 hangOnLogMapper.insert(hangOnLog);
-                
+
                 return false;
             }
 
@@ -143,14 +163,14 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                     log.error("自动挂接失败，档案ID：{}，目标系统配置不存在：{}", archiveId, systemCode);
                     return false;
                 }
-                
+
                 // 执行挂接逻辑
                 // 这里应该调用目标系统的挂接API，根据实际情况实现
                 // 例如：hookResult = hookService.callRemoteHook(interfaceConfig, archiveInfo);
-                
+
                 // 临时实现：根据档案ID的奇偶性决定挂接结果，用于演示真实逻辑
                 hookResult = true;
-                
+
                 if (hookResult) {
                     log.info("自动挂接成功，档案ID：{}，系统代码：{}", archiveId, systemCode);
                 } else {
@@ -163,9 +183,26 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
 
             // 4. 更新档案状态
             if (hookResult) {
-                archiveInfo.setStatus(1); // 已挂接
+                archiveInfo.setStatus(0); // 未挂接（等待审批后才会变为已挂接）
                 archiveInfo.setUpdateTime(LocalDateTime.now());
                 archiveInfoService.updateById(archiveInfo);
+
+                // 建立档案和目标系统的关联关系，默认未挂接
+                InterfaceConfig interfaceConfig = interfaceConfigService.getByInterfaceCode(systemCode);
+                if (interfaceConfig != null) {
+                    // 创建档案与目标系统的关联关系，默认未挂接状态
+                    archiveSystemRelationService.createRelation(
+                        archiveId,
+                        systemCode,
+                        interfaceConfig.getBusinessSystem(),
+                        0, // 0-未挂接
+                        0, // 0-自动挂接
+                        responsiblePerson
+                    );
+                }
+
+                // 提交审批申请，实现挂接与审批的深度集成
+                approvalApplyService.submitApply(archiveId, authentication.getName());
             } else {
                 archiveInfo.setStatus(2); // 挂接失败
                 archiveInfo.setUpdateTime(LocalDateTime.now());
@@ -174,20 +211,43 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
 
             // 5. 记录挂接日志（0-挂接，1-修改，2-解除）
             HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, "system", "auto", systemCode,
-                                          hookResult ? "自动挂接成功" : "自动挂接失败", 
+                                          hookResult ? "自动挂接成功" : "自动挂接失败",
                                           hookResult ? null : "挂接失败");
             hangOnLogMapper.insert(hangOnLog);
 
-            // 发送挂接通知
-            Notification notification = new Notification();
-            notification.setTitle("档案挂接通知");
-            notification.setContent(hookResult ? "档案自动挂接成功" : "档案自动挂接失败");
-            notification.setType(1); // 1-挂接通知
-            notification.setReceiveBy(archiveInfo.getResponsiblePerson() != null ? archiveInfo.getResponsiblePerson() : "system");
-            notification.setBusinessId(archiveId);
-            notification.setBusinessType("archive_hang_on");
-            notificationService.sendNotification(notification);
-            
+            // 发送挂接通知，接收人是当前部门的档案管理员
+            try {
+                // 获取当前操作人的信息
+                if (currentUser != null && currentUser.getDeptId() != null) {
+                    // 获取当前部门的部门负责人列表
+                    LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
+                    userQueryWrapper.eq(SysUser::getDeptId, currentUser.getDeptId());
+                    userQueryWrapper.eq(SysUser::getStatus, 1); // 只获取启用状态的用户
+                    List<SysUser> deptLeaders = sysUserService.list(userQueryWrapper);
+
+                    // 3. 筛选出具有部门负责人角色的用户
+                    for (SysUser user : deptLeaders) {
+                        List<String> userRoleCodes = sysUserRoleService.getRoleCodesByUserId(user.getUserId());
+                        if (userRoleCodes.contains(RoleConstants.ARCHIVE_ADMIN.getRoleCode())) {
+                            Notification notification = new Notification();
+                            notification.setTitle("档案挂接通知");
+                            notification.setContent(hookResult ? "档案自动挂接成功" : "档案自动挂接失败");
+                            notification.setType(hookResult ? 2 : 1); // 1-挂接失败提醒, 2-挂接完成提醒
+                            notification.setReceiverId(user.getUserId()); // 临时设置为0，实际项目中应该传入责任人的ID
+                            notification.setReceiverName(user.getNickname());
+                            notification.setSenderId(1L); // 系统发送
+                            notification.setSenderName("系统管理员");
+                            notification.setArchiveId(archiveId);
+                            notification.setRemark("自动挂接失败");
+                            notification.setStatus(0);
+                            notificationService.sendNotification(notification);
+                        }
+                    }
+                }
+            } catch (Exception e) {
+                log.error("发送挂接通知失败", e);
+            }
+
             log.info("自动挂接档案完成，档案ID：{}，结果：{}", archiveId, hookResult);
             return hookResult;
         } catch (Exception e) {
@@ -196,93 +256,106 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
         }
     }
 
+    @Transactional
     @Override
-    public boolean manualHangOn(Long archiveId, String systemCode, String operateBy) {
-        boolean hookResult = false;
-        String errorInfo = null;
+    public boolean manualHangOn(Long archiveId, List<String> systemCode, String operateBy) {
+        boolean allSuccess = true;
         ArchiveInfo archiveInfo = null;
         
         try {
             // 1. 检查档案是否存在
             archiveInfo = archiveInfoService.getById(archiveId);
             if (archiveInfo == null) {
-                errorInfo = "档案不存在";
-                log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
-                return hookResult;
-            } 
-            // 2. 检查是否已挂接相同系统
-            else if (isArchiveHangedOnSystem(archiveId, systemCode)) {
-                errorInfo = "档案已挂接该系统";
-                log.error("手动挂接失败，档案ID：{}，系统代码：{}，{}", archiveId, systemCode, errorInfo);
-                return hookResult;
-            } else {
-                // 3. 执行真实挂接操作
-                try {
-                    // 获取目标系统配置
-                    InterfaceConfig interfaceConfig = interfaceConfigService.getByInterfaceCode(systemCode);
-                    if (interfaceConfig == null) {
-                        errorInfo = "目标系统配置不存在: " + systemCode;
-                        log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
-                        hookResult = false;
-                    } else {
-                        // 执行挂接逻辑
-                        // 这里应该调用目标系统的挂接API，根据实际情况实现
-                        // 例如：hookResult = hookService.callRemoteHook(interfaceConfig, archiveInfo);
-                        
-                        // 临时实现：根据档案ID的奇偶性决定挂接结果，用于演示真实逻辑
-                        hookResult = true;
-                        
-                        if (hookResult) {
-                            log.info("手动挂接成功，档案ID：{}，系统代码：{}", archiveId, systemCode);
-                        } else {
-                            log.error("手动挂接失败，档案ID：{}，系统代码：{}", archiveId, systemCode);
-                        }
-                    }
-                } catch (Exception e) {
-                    errorInfo = "系统异常：" + e.getMessage();
-                    log.error("手动挂接异常，档案ID：{}，系统代码：{}", archiveId, systemCode, e);
-                    hookResult = false;
-                }
-
-                // 4. 更新档案状态
-                if (hookResult) {
-                    archiveInfo.setStatus(1); // 已挂接
-                } else {
-                    archiveInfo.setStatus(2); // 挂接失败
-                    if (errorInfo == null) {
-                        errorInfo = "挂接失败";
-                    }
-                }
+                log.error("手动挂接失败，档案ID：{}，档案不存在", archiveId);
+                return false;
+            }
+            
+            // 2. 设置档案状态为未挂接（等待审批后才会变为已挂接）
+            if (archiveInfo.getStatus() != 0) {
+                archiveInfo.setStatus(0);
                 archiveInfo.setUpdateTime(LocalDateTime.now());
                 archiveInfoService.updateById(archiveInfo);
             }
-        } catch (Exception e) {
-            errorInfo = "系统异常：" + e.getMessage();
-            log.error("手动挂接档案失败，档案ID：{}，系统代码：{}", archiveId, systemCode, e);
-        } finally {
-            // 只有当档案存在时才记录挂接日志
-            if (archiveInfo != null) {
-                // 5. 记录挂接日志（0-挂接，1-修改，2-解除）
-                HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, operateBy, "manual", systemCode,
-                                              hookResult ? "手动挂接成功" : "手动挂接失败", 
-                                              errorInfo);
-                hangOnLogMapper.insert(hangOnLog);
-
-                // 发送挂接通知
-                Notification notification = new Notification();
-                notification.setTitle("档案挂接通知");
-                notification.setContent(hookResult ? "档案手动挂接成功" : "档案手动挂接失败");
-                notification.setType(1); // 1-挂接通知
-                notification.setReceiveBy(archiveInfo.getResponsiblePerson() != null ? archiveInfo.getResponsiblePerson() : operateBy);
-                notification.setBusinessId(archiveId);
-                notification.setBusinessType("archive_hang_on");
-                notificationService.sendNotification(notification);
+            
+            // 3. 遍历每个系统代码执行挂接操作
+            for (String sysCode : systemCode) {
+                boolean hookResult = false;
+                
+                try {
+                    // 检查是否已挂接相同系统
+                    if (isArchiveHangedOnSystem(archiveId, sysCode)) {
+                        log.error("手动挂接跳过，档案ID：{}，系统代码：{}，档案已挂接该系统", archiveId, sysCode);
+                        continue;
+                    }
+                    
+                    // 获取目标系统配置
+                    InterfaceConfig interfaceConfig = interfaceConfigService.getByInterfaceCode(sysCode);
+                    if (interfaceConfig == null) {
+                        log.error("手动挂接失败，档案ID：{}，系统代码：{}，目标系统配置不存在", archiveId, sysCode);
+                        allSuccess = false;
+                        continue;
+                    }
+                    
+                    // 创建档案与目标系统的关联关系，默认未挂接状态
+                    archiveSystemRelationService.createRelation(
+                        archiveId, 
+                        sysCode, 
+                        interfaceConfig.getBusinessSystem(), 
+                        0, // 0-未挂接
+                        1, // 1-手动挂接
+                        operateBy
+                    );
+                    
+                    hookResult = true;
+                } catch (Exception e) {
+                    log.error("手动挂接档案失败，档案ID：{}，系统代码：{}", archiveId, sysCode, e);
+                    allSuccess = false;
+                }
             }
             
-            log.info("手动挂接档案完成，档案ID：{}，系统代码：{}，结果：{}", archiveId, systemCode, hookResult);
+            if (allSuccess) {
+                // 提交审批申请，实现挂接与审批的深度集成
+                approvalApplyService.submitApply(archiveId, operateBy);
+                // 发送挂接通知，接收人是当前部门的所有部门负责人
+                try {
+                    // 获取当前操作人的信息
+                    SysUser currentUser = sysUserService.getByUsername(operateBy);
+                    if (currentUser != null && currentUser.getDeptId() != null) {
+                        // 获取当前部门的部门负责人列表
+                        LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
+                        userQueryWrapper.eq(SysUser::getDeptId, currentUser.getDeptId());
+                        userQueryWrapper.eq(SysUser::getStatus, 1); // 只获取启用状态的用户
+                        List<SysUser> deptLeaders = sysUserService.list(userQueryWrapper);
+
+                        // 3. 筛选出具有部门负责人角色的用户
+                        for (SysUser user : deptLeaders) {
+                            List<String> userRoleCodes = sysUserRoleService.getRoleCodesByUserId(user.getUserId());
+                            if (userRoleCodes.contains(RoleConstants.DEPT_LEADER.getRoleCode())) {
+                                // 发送挂接审批通知
+                                Notification notification = new Notification();
+                                notification.setTitle("档案挂接审批通知");
+                                notification.setContent("您有一份新的档案挂接申请需要审批");
+                                notification.setType(3); // 3-审批提醒
+                                notification.setReceiverId(user.getUserId());
+                                notification.setReceiverName(user.getNickname());
+                                notification.setSenderId(1L); // 系统发送
+                                notification.setSenderName("系统管理员");
+                                notification.setArchiveId(archiveId);
+                                notification.setRemark("档案挂接审批通知");
+                                notification.setStatus(0);
+                                notificationService.sendNotification(notification);
+                            }
+                        }
+                    }
+                } catch (Exception e) {
+                    log.error("发送挂接通知失败", e);
+                }
+            }
+        } catch (Exception e) {
+            log.error("手动挂接档案失败，档案ID：{}", archiveId, e);
+            allSuccess = false;
         }
-        
-        return hookResult;
+        return allSuccess;
     }
     
     /**
@@ -318,83 +391,90 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                 log.error("手动挂接失败，档案ID：{}，系统代码：{}，{}", archiveId, systemCode, errorInfo);
                 return hookResult;
             } else {
-                // 3. 执行真实挂接操作
+                InterfaceConfig interfaceConfig = interfaceConfigService.getByInterfaceCode(systemCode);
+                if (interfaceConfig == null) {
+                    errorInfo = "目标系统配置不存在: " + systemCode;
+                    log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
+                    return hookResult;
+                }
+
+                archiveInfo.setStatus(0); // 未挂接（等待审批后才会变为已挂接）
+                archiveInfo.setUpdateTime(LocalDateTime.now());
+                // 更新关联业务信息
+                if (archiveType != null) {
+                    archiveInfo.setArchiveType(archiveType);
+                }
+                if (businessNo != null) {
+                    archiveInfo.setBusinessNo(businessNo);
+                }
+                if (businessType != null) {
+                    archiveInfo.setBusinessType(businessType);
+                }
+                if (responsiblePerson != null) {
+                    archiveInfo.setResponsiblePerson(responsiblePerson);
+                }
+                if (department != null) {
+                    archiveInfo.setDepartment(department);
+                }
+                archiveInfoService.updateById(archiveInfo);
+
+                // 创建档案与目标系统的关联关系，默认未挂接状态
+                archiveSystemRelationService.createRelation(
+                        archiveId,
+                        systemCode,
+                        interfaceConfig.getBusinessSystem(),
+                        0, // 0-未挂接
+                        1, // 1-手动挂接
+                        operateBy
+                );
+
+                // 提交审批申请，实现挂接与审批的深度集成
+                approvalApplyService.submitApply(archiveId, operateBy);
+                // 发送挂接通知，接收人是当前部门的所有部门负责人
                 try {
-                    // 获取目标系统配置
-                    InterfaceConfig interfaceConfig = interfaceConfigService.getByInterfaceCode(systemCode);
-                    if (interfaceConfig == null) {
-                        errorInfo = "目标系统配置不存在: " + systemCode;
-                        log.error("手动挂接失败，档案ID：{}，{}", archiveId, errorInfo);
-                        hookResult = false;
-                    } else {
-                        // 执行挂接逻辑
-                        // 这里应该调用目标系统的挂接API，根据实际情况实现
-                        // 例如：hookResult = hookService.callRemoteHook(interfaceConfig, archiveInfo);
-                        
-                        // 临时实现：根据档案ID的奇偶性决定挂接结果，用于演示真实逻辑
-                        hookResult = true;
-                        
-                        if (hookResult) {
-                            log.info("手动挂接成功，档案ID：{}，系统代码：{}", archiveId, systemCode);
-                        } else {
-                            log.error("手动挂接失败，档案ID：{}，系统代码：{}", archiveId, systemCode);
+                    // 获取当前操作人的信息
+                    SysUser currentUser = sysUserService.getByUsername(operateBy);
+                    if (currentUser != null && currentUser.getDeptId() != null) {
+                        // 获取当前部门的部门负责人列表
+                        LambdaQueryWrapper<SysUser> userQueryWrapper = new LambdaQueryWrapper<>();
+                        userQueryWrapper.eq(SysUser::getDeptId, currentUser.getDeptId());
+                        userQueryWrapper.eq(SysUser::getStatus, 1); // 只获取启用状态的用户
+                        List<SysUser> deptLeaders = sysUserService.list(userQueryWrapper);
+
+                        // 3. 筛选出具有部门负责人角色的用户
+                        for (SysUser user : deptLeaders) {
+                            List<String> userRoleCodes = sysUserRoleService.getRoleCodesByUserId(user.getUserId());
+                            if (userRoleCodes.contains(RoleConstants.DEPT_LEADER.getRoleCode())) {
+                                // 发送挂接审批通知
+                                Notification notification = new Notification();
+                                notification.setTitle("档案挂接审批通知");
+                                notification.setContent("您有一份新的档案挂接申请需要审批");
+                                notification.setType(3); // 3-审批提醒
+                                notification.setReceiverId(user.getUserId());
+                                notification.setReceiverName(user.getNickname());
+                                notification.setSenderId(1L); // 系统发送
+                                notification.setSenderName("系统管理员");
+                                notification.setArchiveId(archiveId);
+                                notification.setRemark("档案挂接审批通知");
+                                notification.setStatus(0);
+                                notificationService.sendNotification(notification);
+                            }
                         }
                     }
                 } catch (Exception e) {
-                    errorInfo = "系统异常：" + e.getMessage();
-                    log.error("手动挂接异常，档案ID：{}，系统代码：{}", archiveId, systemCode, e);
-                    hookResult = false;
+                    log.error("发送挂接通知失败", e);
                 }
-
-                // 4. 更新档案状态和关联业务信息
-                if (hookResult) {
-                    archiveInfo.setStatus(1); // 已挂接
-                    archiveInfo.setUpdateTime(LocalDateTime.now());
-                    // 更新关联业务信息
-                    if (archiveType != null) {
-                        archiveInfo.setArchiveType(archiveType);
-                    }
-                    if (businessNo != null) {
-                        archiveInfo.setBusinessNo(businessNo);
-                    }
-                    if (businessType != null) {
-                        archiveInfo.setBusinessType(businessType);
-                    }
-                    if (responsiblePerson != null) {
-                        archiveInfo.setResponsiblePerson(responsiblePerson);
-                    }
-                    if (department != null) {
-                        archiveInfo.setDepartment(department);
-                    }
-                    archiveInfoService.updateById(archiveInfo);
-                } else {
-                    archiveInfo.setStatus(2); // 挂接失败
-                    archiveInfo.setUpdateTime(LocalDateTime.now());
-                    archiveInfoService.updateById(archiveInfo);
-                    if (errorInfo == null) {
-                        errorInfo = "挂接失败";
-                    }
-                }
+                hookResult = true;
             }
         } catch (Exception e) {
-            errorInfo = "系统异常：" + e.getMessage();
-            log.error("手动挂接档案失败，档案ID：{}，系统代码：{}", archiveId, systemCode, e);
-        } finally {
-            // 只有当档案存在时才记录挂接日志
-            if (archiveInfo != null) {
-                // 5. 记录挂接日志（0-挂接，1-修改，2-解除）
-                HangOnLog hangOnLog = createHangOnLog(archiveId, 0, hookResult ? 1 : 2, operateBy, "manual", systemCode, 
-                                              hookResult ? "手动挂接成功" : "手动挂接失败", 
-                                              errorInfo);
-                hangOnLogMapper.insert(hangOnLog);
-            }
-
-            log.info("手动挂接档案完成，档案ID：{}，系统代码：{}，结果：{}", archiveId, systemCode, hookResult);
+            log.error("批量挂接档案失败，档案ID：{}，系统代码：{}", archiveId, systemCode, e);
+            hookResult = false;
         }
         
         return hookResult;
     }
 
+    @Transactional
     @Override
     public ResponseResult<Map<String, Object>> batchHangOn(HangOnRequestDTO hangOnRequestDTO) {
         try {
@@ -403,7 +483,11 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                 return ResponseResult.fail("档案ID列表不能为空");
             }
 
-            String systemCode = hangOnRequestDTO.getSystemCode();
+            List<String> systemCodes = hangOnRequestDTO.getSystemCode();
+            if (systemCodes == null || systemCodes.isEmpty()) {
+                return ResponseResult.fail("目标系统列表不能为空");
+            }
+            
             String operateBy = hangOnRequestDTO.getOperateBy();
             String hangOnMethod = hangOnRequestDTO.getHangOnMethod();
             
@@ -414,19 +498,21 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             String responsiblePerson = hangOnRequestDTO.getResponsiblePerson();
             String department = hangOnRequestDTO.getDepartment();
 
-            int totalCount = archiveIds.size();
+            int totalCount = archiveIds.size() * systemCodes.size();
             int successCount = 0;
             int failCount = 0;
 
-            // 批量挂接档案
+            // 批量挂接档案：每个档案挂接到每个选择的系统
             for (Long archiveId : archiveIds) {
-                boolean result = manualHangOnWithBusinessInfo(archiveId, systemCode, operateBy, 
-                                                            archiveType, businessNo, businessType, 
-                                                            responsiblePerson, department);
-                if (result) {
-                    successCount++;
-                } else {
-                    failCount++;
+                for (String systemCode : systemCodes) {
+                    boolean result = manualHangOnWithBusinessInfo(archiveId, systemCode, operateBy, 
+                                                                archiveType, businessNo, businessType, 
+                                                                responsiblePerson, department);
+                    if (result) {
+                        successCount++;
+                    } else {
+                        failCount++;
+                    }
                 }
             }
 
@@ -435,13 +521,13 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
             resultMap.put("totalCount", totalCount);
             resultMap.put("successCount", successCount);
             resultMap.put("failCount", failCount);
-            resultMap.put("description", "批量挂接完成，成功：" + successCount + "，失败：" + failCount);
+            resultMap.put("description", "已通知挂接审批，成功：" + successCount + "，失败：" + failCount);
 
-            log.info("批量挂接档案完成，总数：{}，成功：{}，失败：{}", totalCount, successCount, failCount);
-            return ResponseResult.success("批量挂接完成", resultMap);
+            log.info("批量挂接档案发送审批完成，总数：{}，成功：{}，失败：{}", totalCount, successCount, failCount);
+            return ResponseResult.success(resultMap);
         } catch (Exception e) {
             log.error("批量挂接档案失败", e);
-            return ResponseResult.fail("批量挂接失败");
+            return ResponseResult.fail("批量挂接失败：" + e.getMessage());
         }
     }
 
@@ -519,10 +605,12 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
                 Notification notification = new Notification();
                 notification.setTitle("档案挂接通知");
                 notification.setContent(unhookResult ? "档案解除挂接成功" : "档案解除挂接失败");
-                notification.setType(1); // 1-挂接通知
-                notification.setReceiveBy(archiveInfo.getResponsiblePerson() != null ? archiveInfo.getResponsiblePerson() : operateBy);
-                notification.setBusinessId(archiveId);
-                notification.setBusinessType("archive_hang_on");
+                notification.setType(4); // 4-解除挂接通知
+                notification.setReceiverId(1L); // 临时设置为0，实际项目中应该传入责任人的ID
+                notification.setReceiverName(archiveInfo.getResponsiblePerson() != null ? archiveInfo.getResponsiblePerson() : operateBy);
+                notification.setSenderId(1L); // 系统发送
+                notification.setSenderName("系统管理员");
+                notification.setArchiveId(archiveId);
                 notificationService.sendNotification(notification);
             }
             
@@ -533,96 +621,7 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
     }
 
     @Override
-    public boolean retryHangOn(Long archiveId, String operateBy) {
-        boolean retryResult = false;
-        String errorInfo = null;
-        ArchiveInfo archiveInfo = null;
-        
-        try {
-            // 1. 检查档案是否存在
-            archiveInfo = archiveInfoService.getById(archiveId);
-            if (archiveInfo == null) {
-                errorInfo = "档案不存在";
-                log.error("重试挂接失败，档案ID：{}，{}", archiveId, errorInfo);
-                return retryResult;
-            }
-            // 2. 检查档案是否为挂接失败状态
-            else if (archiveInfo.getStatus() != 2) {
-                errorInfo = "档案状态不是挂接失败";
-                log.error("重试挂接失败，档案ID：{}，{}", archiveId, errorInfo);
-            } else {
-                // 3. 执行真实重试挂接操作
-                try {
-                    // 获取所有已配置的目标系统
-                    // 注意：这里需要根据实际业务逻辑获取目标系统，这里仅作演示
-                    String systemCode = "default-system"; // 临时默认系统代码
-                    InterfaceConfig interfaceConfig = interfaceConfigService.getByInterfaceCode(systemCode);
-                    
-                    if (interfaceConfig == null) {
-                        errorInfo = "目标系统配置不存在: " + systemCode;
-                        log.error("重试挂接失败，档案ID：{}，{}", archiveId, errorInfo);
-                        retryResult = false;
-                    } else {
-                        // 执行挂接逻辑
-                        // 这里应该调用目标系统的挂接API，根据实际情况实现
-                        // 例如：retryResult = hookService.callRemoteHook(interfaceConfig, archiveInfo);
-                        
-                        // 临时实现：根据档案ID的奇偶性决定重试挂接结果，用于演示真实逻辑
-                        retryResult = true;
-                        
-                        if (retryResult) {
-                            log.info("重试挂接成功，档案ID：{}，系统代码：{}", archiveId, systemCode);
-                        } else {
-                            log.error("重试挂接失败，档案ID：{}，系统代码：{}", archiveId, systemCode);
-                        }
-                    }
-                } catch (Exception e) {
-                    errorInfo = "系统异常：" + e.getMessage();
-                    log.error("重试挂接异常，档案ID：{}", archiveId, e);
-                    retryResult = false;
-                }
-
-                // 4. 更新档案状态
-                if (retryResult) {
-                    archiveInfo.setStatus(1); // 已挂接
-                    archiveInfo.setUpdateTime(LocalDateTime.now());
-                    archiveInfoService.updateById(archiveInfo);
-                } else {
-                    if (errorInfo == null) {
-                        errorInfo = "重试挂接失败";
-                    }
-                }
-            }
-        } catch (Exception e) {
-            errorInfo = "系统异常：" + e.getMessage();
-            log.error("重试挂接档案失败，档案ID：{}", archiveId, e);
-        } finally {
-            // 只有当档案存在时才记录挂接日志
-            if (archiveInfo != null) {
-                // 5. 记录重试挂接日志
-                HangOnLog hangOnLog = createHangOnLog(archiveId, 0, retryResult ? 1 : 2, operateBy, "retry", "target-system",
-                                              retryResult ? "重试挂接成功" : "重试挂接失败", 
-                                              errorInfo);
-                hangOnLogMapper.insert(hangOnLog);
-
-                // 发送重试挂接通知
-                Notification notification = new Notification();
-                notification.setTitle("档案挂接通知");
-                notification.setContent(retryResult ? "档案重试挂接成功" : "档案重试挂接失败");
-                notification.setType(1); // 1-挂接通知
-                notification.setReceiveBy(archiveInfo.getResponsiblePerson() != null ? archiveInfo.getResponsiblePerson() : operateBy);
-                notification.setBusinessId(archiveId);
-                notification.setBusinessType("archive_hang_on");
-                notificationService.sendNotification(notification);
-            }
-            
-            log.info("重试挂接档案完成，档案ID：{}，结果：{}", archiveId, retryResult);
-        }
-        
-        return retryResult;
-    }
-
-    @Override
+    @DataPermission(department = "current_and_children")
     public List<Map<String, Object>> getHangOnRelations(Long archiveId) {
         try {
             List<Map<String, Object>> relations = new ArrayList<>();
@@ -806,6 +805,55 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
     }
 
     /**
+     * 校验档案挂接前的业务状态
+     */
+    @Override
+    public ResponseResult<Boolean> checkHangOnValid(List<Long> archiveIds, List<String> systemCode) {
+        if (archiveIds == null || archiveIds.isEmpty()) {
+            return ResponseResult.fail("档案ID列表不能为空");
+        }
+        
+        if (systemCode == null || systemCode.isEmpty()) {
+            return ResponseResult.fail("目标系统代码列表不能为空");
+        }
+        
+        // 遍历每个档案ID
+        for (Long archiveId : archiveIds) {
+            // 查询该档案是否有正在审核的业务
+            List<ApprovalApply> applyList = approvalApplyService.list(
+                new LambdaQueryWrapper<ApprovalApply>()
+                    .eq(ApprovalApply::getArchiveId, archiveId)
+                    .in(ApprovalApply::getApplyStatus, 0, 1, 2) // 0-待审批, 1-部门审核通过, 2-档案复核通过
+            );
+            
+            if (!applyList.isEmpty()) {
+                // 获取该档案的系统关系
+                List<ArchiveSystemRelation> relations = archiveSystemRelationService.getByArchiveId(archiveId);
+                if (!relations.isEmpty()) {
+                    StringBuilder message = new StringBuilder();
+                    message.append("档案ID: " + archiveId + " 与以下系统存在正在审核的业务: ");
+                    
+                    for (ArchiveSystemRelation relation : relations) {
+                        // 如果该系统在请求的系统列表中
+                        if (systemCode.contains(relation.getSystemCode())) {
+                            String systemName = interfaceConfigService.getTargetSystemName(relation.getSystemCode());
+                            message.append(systemName + "[" + relation.getSystemCode() + "]、");
+                        }
+                    }
+                    
+                    if (message.length() > 0) {
+                        // 移除最后的顿号
+                        message.setLength(message.length() - 1);
+                        return ResponseResult.fail(message.toString());
+                    }
+                }
+            }
+        }
+        
+        return ResponseResult.success(true);
+    }
+
+    /**
      * 创建挂接日志
      */
     private HangOnLog createHangOnLog(Long archiveId, Integer hangOnType, Integer result, 
@@ -824,130 +872,5 @@ public class HangOnManagementServiceImpl implements HangOnManagementService {
         hangOnLog.setErrorInfo(errorInfo);
         hangOnLog.setCreateTime(LocalDateTime.now());
         return hangOnLog;
-    }
-
-    @Override
-    public ResponseResult<Map<String, Object>> batchRetryHangOn(List<Long> archiveIds, String operateBy) {
-        try {
-            if (archiveIds == null || archiveIds.isEmpty()) {
-                return ResponseResult.fail("档案ID列表不能为空");
-            }
-
-            int totalCount = archiveIds.size();
-            int successCount = 0;
-            int failCount = 0;
-            List<Long> successIds = new ArrayList<>();
-            List<Long> failIds = new ArrayList<>();
-
-            // 批量重试挂接档案
-            for (Long archiveId : archiveIds) {
-                boolean result = retryHangOn(archiveId, operateBy);
-                if (result) {
-                    successCount++;
-                    successIds.add(archiveId);
-                } else {
-                    failCount++;
-                    failIds.add(archiveId);
-                }
-            }
-
-            // 构建返回结果
-            Map<String, Object> resultMap = new HashMap<>();
-            resultMap.put("totalCount", totalCount);
-            resultMap.put("successCount", successCount);
-            resultMap.put("failCount", failCount);
-            resultMap.put("successIds", successIds);
-            resultMap.put("failIds", failIds);
-            resultMap.put("description", "批量重试挂接完成，成功：" + successCount + "，失败：" + failCount);
-
-            log.info("批量重试挂接档案完成，总数：{}，成功：{}，失败：{}", totalCount, successCount, failCount);
-            return ResponseResult.success("批量重试挂接完成", resultMap);
-        } catch (Exception e) {
-            log.error("批量重试挂接档案失败", e);
-            return ResponseResult.fail("批量重试挂接失败");
-        }
-    }
-
-    @Override
-    public ResponseResult<Map<String, Object>> combinationHangOn(CombinationHangOnRequestDTO combinationHangOnRequestDTO) {
-        try {
-            String combinationName = combinationHangOnRequestDTO.getCombinationName();
-            String combinationType = combinationHangOnRequestDTO.getCombinationType();
-            List<Long> archiveIds = combinationHangOnRequestDTO.getArchiveIds();
-            String systemCode = combinationHangOnRequestDTO.getSystemCode();
-            String operateBy = combinationHangOnRequestDTO.getOperateBy();
-            String hangOnMethod = combinationHangOnRequestDTO.getHangOnMethod();
-            
-            // 验证参数
-            if (archiveIds == null || archiveIds.isEmpty()) {
-                return ResponseResult.fail("档案ID列表不能为空");
-            }
-            
-            if (StringUtils.isBlank(combinationName)) {
-                return ResponseResult.fail("组合名称不能为空");
-            }
-            
-            // 1. 创建档案组合
-            ArchiveCombination combination = new ArchiveCombination();
-            combination.setCombinationName(combinationName);
-            combination.setCombinationType(combinationType);
-            combination.setStatus(0); // 初始状态：未挂接
-            combination.setCreateBy(operateBy);
-            combination.setCreateTime(LocalDateTime.now());
-            combination.setUpdateTime(LocalDateTime.now());
-            
-            // 保存档案组合
-            archiveCombinationService.save(combination);
-            Long combinationId = combination.getId();
-            
-            // 2. 保存档案组合关系
-            List<ArchiveCombinationRelation> relations = new ArrayList<>();
-            for (int i = 0; i < archiveIds.size(); i++) {
-                ArchiveCombinationRelation relation = new ArchiveCombinationRelation();
-                relation.setCombinationId(combinationId);
-                relation.setArchiveId(archiveIds.get(i));
-                relation.setArchiveOrder(i + 1);
-                relation.setCreateTime(LocalDateTime.now());
-                relations.add(relation);
-            }
-            archiveCombinationRelationService.saveBatch(relations);
-            
-            // 3. 批量挂接组合内的档案
-            HangOnRequestDTO hangOnRequestDTO = new HangOnRequestDTO();
-            hangOnRequestDTO.setArchiveIds(archiveIds);
-            hangOnRequestDTO.setSystemCode(systemCode);
-            hangOnRequestDTO.setOperateBy(operateBy);
-            hangOnRequestDTO.setHangOnMethod(hangOnMethod);
-            hangOnRequestDTO.setArchiveType(combinationHangOnRequestDTO.getArchiveType());
-            hangOnRequestDTO.setBusinessNo(combinationHangOnRequestDTO.getBusinessNo());
-            hangOnRequestDTO.setBusinessType(combinationHangOnRequestDTO.getBusinessType());
-            hangOnRequestDTO.setResponsiblePerson(combinationHangOnRequestDTO.getResponsiblePerson());
-            hangOnRequestDTO.setDepartment(combinationHangOnRequestDTO.getDepartment());
-            
-            ResponseResult<Map<String, Object>> batchResult = batchHangOn(hangOnRequestDTO);
-            
-            // 4. 更新组合状态
-            if (batchResult.getCode() == 200) {
-                Map<String, Object> resultMap = batchResult.getData();
-                if (resultMap != null) {
-                    Integer successCount = (Integer) resultMap.get("successCount");
-                    if (successCount != null && successCount == archiveIds.size()) {
-                        combination.setStatus(1); // 全部挂接成功
-                    } else {
-                        combination.setStatus(2); // 部分挂接失败
-                    }
-                } else {
-                    combination.setStatus(2); // 部分挂接失败
-                }
-                combination.setUpdateTime(LocalDateTime.now());
-                archiveCombinationService.updateById(combination);
-            }
-            
-            log.info("档案组合挂接完成，组合ID：{}，组合名称：{}，档案数量：{}", combinationId, combinationName, archiveIds.size());
-            return batchResult;
-        } catch (Exception e) {
-            log.error("档案组合挂接失败", e);
-            return ResponseResult.fail("档案组合挂接失败");
-        }
     }
 }

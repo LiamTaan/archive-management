@@ -54,6 +54,12 @@ public class SysUser {
     private Integer status;
 
     /**
+     * 部门ID
+     */
+    @TableField("dept_id")
+    private Long deptId;
+
+    /**
      * 创建时间
      */
     @TableField("create_time")
